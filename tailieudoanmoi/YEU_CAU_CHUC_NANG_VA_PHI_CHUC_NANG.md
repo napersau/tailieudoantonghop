@@ -1,0 +1,276 @@
+# TÀI LIỆU YÊU CẦU CHỨC NĂNG VÀ PHI CHỨC NĂNG
+## HỆ THỐNG QUẢN LÝ PHÒNG KHÁM THÚ Y (VETERINARY CLINIC MANAGEMENT SYSTEM)
+
+> **Tài liệu chuẩn IEEE 830 / ISO/IEC/IEEE 29148 phục vụ Thuyết minh & Bảo vệ Đồ án Tốt nghiệp**  
+> **Phiên bản:** 3.0 (đồng bộ lược đồ CSDL v3.0: hóa đơn riêng cho từng dịch vụ, mua thuốc tại phòng khám là tùy chọn; khớp State Machine, Activity, Use Case và Ngoại lệ v3.0)  
+> **Mục tiêu:** Định nghĩa toàn diện, chuẩn xác và có thể kiểm chứng được (verifiable) toàn bộ các Yêu cầu Chức năng (Functional Requirements - FR) và Yêu cầu Phi chức năng (Non-Functional Requirements - NFR) của hệ thống phần mềm, làm cơ sở pháp lý và kỹ thuật cho thiết kế kiến trúc, CSDL, giao diện và kiểm thử.
+
+---
+
+## MỤC LỤC TỔNG QUAN
+
+1. [Tổng quan Phạm vi Hệ thống & Tác nhân (Scope & Actors)](#1-tổng-quan-phạm-vi-hệ-thống--tác-nhân)
+2. [Yêu cầu Chức năng (Functional Requirements - FR)](#2-yêu-cầu-chức-năng-functional-requirements---fr)
+   - [Phân hệ 1: Quản trị Hệ thống, Tài khoản & Cấu hình Danh mục](#phân-hệ-1-quản-trị-hệ-thống-tài-khoản--cấu-hình-danh-mục)
+   - [Phân hệ 2: Quản lý Hồ sơ Khách hàng & Thú cưng](#phân-hệ-2-quản-lý-hồ-sơ-khách-hàng--thú-cưng)
+   - [Phân hệ 3: Đặt lịch hẹn Khám & Quản lý Lịch hẹn](#phân-hệ-3-đặt-lịch-hẹn-khám--quản-lý-lịch-hẹn)
+   - [Phân hệ 4: Tiếp đón Sảnh, Hàng đợi & Phân công Bác sĩ](#phân-hệ-4-tiếp-đón-sảnh-hàng-đợi--phân-công-bác-sĩ)
+   - [Phân hệ 5: Khám Lâm sàng Sơ bộ & Chỉ định Dịch vụ Kỹ thuật (GĐ 1)](#phân-hệ-5-khám-lâm-sàng-sơ-bộ--chỉ-định-dịch-vụ-kỹ-thuật-gđ-1)
+   - [Phân hệ 6: Quản lý & Thực hiện Cận lâm sàng (Lab & CĐHA)](#phân-hệ-6-quản-lý--thực-hiện-cận-lâm-sàng-lab--cđha)
+   - [Phân hệ 7: Hội chẩn Kết quả, Chẩn đoán Xác định & Kê đơn (GĐ 2)](#phân-hệ-7-hội-chẩn-kết-quả-chẩn-đoán-xác-định--kê-đơn-gđ-2)
+   - [Phân hệ 8: Thanh toán Hóa đơn Dịch vụ & Bán thuốc theo Đơn](#phân-hệ-8-thanh-toán-hóa-đơn-dịch-vụ--bán-thuốc-theo-đơn)
+   - [Phân hệ 9: Tra cứu Bệnh án Điện tử & Báo cáo Thống kê](#phân-hệ-9-tra-cứu-bệnh-án-điện-tử--báo-cáo-thống-kê)
+3. [Yêu cầu Phi chức năng (Non-Functional Requirements - NFR)](#3-yêu-cầu-phi-chức-năng-non-functional-requirements---nfr)
+   - [Danh mục 8 Yêu cầu Phi chức năng chuẩn Đồ án Tốt nghiệp](#danh-mục-8-yêu-cầu-phi-chức-năng-chuẩn-đồ-án-tốt-nghiệp)
+4. [Ma trận Truy vết Yêu cầu Tổng hợp (Requirements Traceability Matrix - RTM)](#4-ma-trận-truy-vết-yêu-cầu-tổng-hợp-requirements-traceability-matrix---rtm)
+5. [Tổng kết bàn giao tài liệu](#5-tổng-kết-bàn-giao-tài-liệu)
+6. [Phụ lục: Thay đổi so với phiên bản 2.0](#phụ-lục-thay-đổi-so-với-phiên-bản-20)
+
+---
+
+## 1. TỔNG QUAN PHẠM VI HỆ THỐNG & TÁC NHÂN
+
+### 1.1. Phạm vi bài toán
+Hệ thống tin học hóa toàn diện quy trình vận hành phòng khám thú y điều trị ngoại trú theo mô hình **Chu kỳ Y tế Bất đồng bộ Hai pha (Two-Phase Asynchronous Clinical Cycle)**:
+- **Pha 1 (Lâm sàng sơ bộ):** Tiếp đón $\rightarrow$ Hàng đợi sảnh $\rightarrow$ Bác sĩ khám thực thể $\rightarrow$ Ra chỉ định cận lâm sàng $\rightarrow$ Giải phóng Bác sĩ về rảnh để khám ca tiếp theo.
+- **Tiến trình Song song:** Thực hiện cận lâm sàng đồng thời tại Phòng Xét nghiệm (Lab) và Phòng Chẩn đoán hình ảnh (CĐHA).
+- **Pha 2 (Hội chẩn & Chốt ca):** Hệ thống kích hoạt Khóa ưu tiên (Priority Lock) $\rightarrow$ Bác sĩ đón ca có kết quả $\rightarrow$ Hội chẩn, chẩn đoán xác định $\rightarrow$ Kê đơn thuốc $\rightarrow$ Thu tiền các hóa đơn dịch vụ $\rightarrow$ Hoàn tất đợt khám.
+- **Bán thuốc (tùy chọn):** Khách được mua thuốc theo đơn tại phòng khám hoặc mua ngoài. Nếu mua tại phòng khám, Thu ngân lập hóa đơn thuốc, thu tiền và trừ kho trong cùng một giao dịch.
+- **Nguyên tắc hóa đơn:** Mỗi dịch vụ được chỉ định (kể cả phí khám) có một hóa đơn dịch vụ riêng, lập ngay lúc chỉ định; thuốc có hóa đơn thuốc riêng. Hệ thống không lưu tổng tiền, số tiền được tính từ số lượng, đơn giá, thuế suất và giảm giá.
+
+### 1.2. Danh sách 6 Vai trò người dùng chính thức (Roles)
+
+| Mã Vai trò | Tên Vai trò | Mô tả thẩm quyền & Phạm vi trách nhiệm nghiệp vụ |
+| :---: | :--- | :--- |
+| **`ADMIN`** | Quản trị viên hệ thống | Toàn quyền quản trị tài khoản nhân sự, phân bổ số phòng làm việc cố định cho bác sĩ và kỹ thuật viên, cấu hình danh mục dịch vụ, danh mục thuốc, cấu hình chỉ số xét nghiệm, khoảng tham chiếu loài và xem toàn bộ báo cáo doanh thu. |
+| **`RECEPTIONIST`** | Lễ tân / Thu ngân | Tiếp đón khách hàng, tiếp nhận lịch hẹn, tạo hồ sơ khách hàng/thú cưng, điều phối hàng đợi sảnh, phân công bác sĩ vào phòng khám, thu tiền các hóa đơn dịch vụ, và bán thuốc theo đơn khi khách chọn mua tại phòng khám (lập hóa đơn thuốc, lấy thuốc từ tủ). |
+| **`VETERINARIAN`** | Bác sĩ khám lâm sàng | Bác sĩ khám chính tại phòng khám cố định; thực hiện khám lâm sàng sơ bộ (GĐ 1), chỉ định cận lâm sàng, đọc kết quả chẩn đoán hình ảnh/xét nghiệm (GĐ 2), chẩn đoán xác định, kê đơn thuốc điện tử và khóa hồ sơ bệnh án. |
+| **`LAB_TECHNICIAN`** | Kỹ thuật viên / Bác sĩ Xét nghiệm | Phụ trách Phòng Xét nghiệm; theo dõi hàng đợi Lab, lấy mẫu bệnh phẩm, vận hành máy phân tích tự động, nhập chỉ số đo lường thực tế, đối soát với khoảng tham chiếu sinh lý của loài và xác nhận hoàn tất kết quả. |
+| **`IMAGING_TECHNICIAN`** | Kỹ thuật viên / Bác sĩ Chẩn đoán hình ảnh | Phụ trách Phòng Chẩn đoán hình ảnh; theo dõi hàng đợi CĐHA, chụp X-quang, quét siêu âm, tải các tệp ảnh thực tế/DICOM lên hệ thống, nhập mô tả hình ảnh tổn thương và kết luận hình thái học. |
+| **`PET_OWNER`** | Khách hàng / Chủ thú cưng | Sử dụng Cổng thông tin (Customer Portal) để quản lý hồ sơ thú cưng cá nhân, đặt lịch hẹn khám trực tuyến theo khung giờ, quản lý hủy/đổi lịch hẹn và tra cứu toàn bộ lịch sử bệnh án, kết quả xét nghiệm, đơn thuốc điện tử (dùng để mua thuốc ngoài nếu không mua tại phòng khám). |
+
+---
+
+## 2. YÊU CẦU CHỨC NĂNG (FUNCTIONAL REQUIREMENTS - FR)
+
+> **Quy ước mức độ ưu tiên theo chuẩn MoSCoW:**
+> - **Must Have (M):** Bắt buộc phải có để hệ thống vận hành được, không thể thiếu khi bảo vệ đồ án.
+> - **Should Have (S):** Rất quan trọng, nâng cao chất lượng vận hành và giải quyết các ngoại lệ nghiệp vụ.
+> - **Could Have (C):** Tiện ích mở rộng nhằm tối ưu hóa trải nghiệm người dùng.
+
+---
+
+### Phân hệ 1: Quản trị Hệ thống, Tài khoản & Cấu hình Danh mục
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-01** | Quản lý tài khoản & Phân quyền nội bộ | Cho phép Admin tạo, xem danh sách, cập nhật thông tin nhân sự và khóa/mở khóa tài khoản nhân viên (`ACTIVE`, `INACTIVE`, `LOCKED`). Gán đúng 1 vai trò trong 5 vai trò nội bộ (`ADMIN`, `VETERINARIAN`, `RECEPTIONIST`, `LAB_TECHNICIAN`, `IMAGING_TECHNICIAN`). Tài khoản `PET_OWNER` không do Admin gán mà được tạo khi Lễ tân đăng ký khách hàng (FR-09) hoặc khách tự đăng ký trên Portal. | Admin | **M** | UC-01<br>BR-20 |
+| **FR-02** | Quản lý số phòng làm việc cố định cho Bác sĩ / Kỹ thuật viên | Cho phép Admin gán và cập nhật số phòng làm việc cố định (`users.room_number`) trực tiếp vào hồ sơ của từng Bác sĩ thú y và Kỹ thuật viên. Hệ thống không tạo bảng phòng khám riêng và không lưu số phòng trên đợt khám (phòng của ca khám suy ra từ Bác sĩ phụ trách). | Admin | **M** | UC-02<br>BR-13 |
+| **FR-03** | Quản lý danh mục Dịch vụ kỹ thuật | Cho phép Admin tạo mới, chỉnh sửa thông tin dịch vụ kỹ thuật: Mã dịch vụ, Tên dịch vụ, Phân nhóm (`category` thuộc 9 nhóm cố định), Đơn giá niêm yết (`price`), Thuế suất VAT (`vat_rate`), Mô tả, Trạng thái hoạt động (`is_active`). Với dịch vụ nhóm `LABORATORY`, Admin cấu hình gói xét nghiệm gồm những chỉ số nào (`service_lab_test_items`). Thay đổi giá chỉ áp dụng cho chỉ định mới, không ảnh hưởng hóa đơn đã lập. | Admin | **M** | UC-03, UC-05<br>BR-25 |
+| **FR-04** | Quản lý danh mục Thuốc & Tủ thuốc | Cho phép Admin quản lý danh mục dược phẩm: Mã thuốc, Tên thương mại, Hoạt chất, Đơn vị tính (Viên, Ống, Lọ, Gói), Dạng bào chế, Đơn giá bán niêm yết (`sale_price`), Thuế suất VAT (`vat_rate`), Ngưỡng cảnh báo tồn kho thấp (`min_stock_alert`) và hiển thị Số lượng tồn kho hiện tại (`stock_quantity`). Tồn kho không được sửa trực tiếp trên form danh mục mà chỉ thay đổi qua giao dịch kho (FR-66) hoặc bán thuốc (FR-63). | Admin | **M** | UC-04<br>BR-26, BR-30 |
+| **FR-05** | Quản lý danh mục Chỉ số xét nghiệm (Lab Items) | Cho phép Admin quản lý danh mục các chỉ số phân tích huyết học/sinh hóa: Mã chỉ số (WBC, RBC, HGB, PLT...), Tên chỉ số, Đơn vị đo lường chuẩn quốc tế (10^9/L, g/dL...). | Admin | **M** | UC-05<br>BR-23 |
+| **FR-06** | Quản lý Khoảng tham chiếu sinh lý theo Loài | Cho phép Admin thiết lập khoảng giá trị sinh lý bình thường cho từng chỉ số theo loài (`min_value`, `max_value` riêng biệt cho loài `DOG` và loài `CAT`). | Admin | **M** | UC-06<br>BR-23, BR-24 |
+| **FR-07** | Quản lý danh mục Loài thú cưng | Cho phép Admin cấu hình danh mục loài thú cưng được tiếp nhận tại phòng khám (Mã loài, Tên loài: Chó, Mèo...). | Admin | **M** | UC-07<br>BR-15 |
+
+---
+
+### Phân hệ 2: Quản lý Hồ sơ Khách hàng & Thú cưng
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-08** | Tìm kiếm thông tin Khách hàng đa tiêu chí | Cho phép Lễ tân tìm kiếm hồ sơ khách hàng nhanh chóng qua Số điện thoại (chính xác), Họ tên hoặc Tên thú cưng. Thời gian trả về tức thì. | Lễ tân | **M** | UC-18<br>NFR-01 |
+| **FR-09** | Đăng ký & Cập nhật Hồ sơ Khách hàng | Cho phép Lễ tân tạo mới hồ sơ chủ nuôi khi đến phòng khám lần đầu: Họ tên, Số điện thoại (duy nhất, bắt buộc), Email, Địa chỉ liên hệ. | Lễ tân | **M** | UC-18<br>BR-14 |
+| **FR-10** | Đăng ký & Quản lý Hồ sơ Thú cưng | Cho phép Lễ tân (hoặc Chủ nuôi trên Portal) tạo mới/cập nhật hồ sơ bệnh nhân: Tên thú cưng, Loài (`species_id`), Giống, Giới tính (`MALE`, `FEMALE`, `UNKNOWN`), Ngày sinh/Tuổi ước tính, Màu lông, Tình trạng triệt sản và Đặc điểm nhận dạng. | Lễ tân, Chủ nuôi | **M** | UC-18<br>BR-15 |
+| **FR-11** | Quản lý quan hệ 1 Khách hàng - Nhiều Thú cưng | Hệ thống duy trì mối liên kết một chủ nuôi có thể sở hữu nhiều thú cưng; hiển thị danh sách toàn bộ thú cưng của khách hàng khi mở hồ sơ chủ nuôi. | Lễ tân, Chủ nuôi | **M** | UC-18 |
+
+---
+
+### Phân hệ 3: Đặt lịch hẹn Khám & Quản lý Lịch hẹn
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-12** | Đặt lịch hẹn khám trực tuyến qua Portal | Cho phép Chủ thú cưng đặt lịch hẹn trước: Chọn thú cưng trong danh sách, chọn ngày hẹn, chọn khung giờ 30 phút còn trống, nhập lý do khám/triệu chứng ban đầu. **Hệ thống tuyệt đối không cho phép khách hàng chọn Bác sĩ khám khi đặt lịch**. Lịch hẹn tạo ra có trạng thái `PENDING`. | Chủ nuôi | **M** | UC-14<br>BR-04, BR-05 |
+| **FR-13** | Kiểm soát sức chứa khung giờ đặt hẹn tự động | Hệ thống tự động tính toán số lượng lịch tối đa cho mỗi khung giờ 30 phút theo công thức: $Capacity_{slot} = N_{active} \times 2$ (bằng tổng số Bác sĩ đang hoạt động nhân hệ số phục vụ y tế $k=2$ theo chu kỳ khám sơ bộ 15 phút). Khi một khung giờ đã đủ số lượng đặt, hệ thống tự động làm mờ và chặn đặt tiếp. | Hệ thống | **M** | UC-14<br>EX-01 |
+| **FR-14** | Quản lý Lịch hẹn cá nhân trên Portal | Cho phép Chủ thú cưng theo dõi trạng thái lịch hẹn cá nhân (`PENDING`, `CONFIRMED`, `CHECKED_IN`, `CANCELLED`, `NO_SHOW`). Cho phép tự hủy hẹn hoặc đổi khung giờ trước giờ hẹn tối thiểu 02 tiếng. | Chủ nuôi | **M** | UC-15<br>BR-05 |
+| **FR-15** | Đặt lịch hẹn trực tiếp tại quầy / qua điện thoại | Cho phép Lễ tân đặt lịch hẹn cho khách gọi điện hoặc đăng ký tại quầy. Lịch hẹn do Lễ tân tạo được tự động xác nhận ngay sang trạng thái `CONFIRMED`. | Lễ tân | **M** | UC-16<br>BR-14 |
+| **FR-16** | Duyệt xác nhận / Từ chối Lịch hẹn trực tuyến | Cho phép Lễ tân mở danh sách lịch hẹn chờ duyệt (`PENDING`), gọi điện xác thực thông tin và bấm "Duyệt xác nhận" (`CONFIRMED`) hoặc "Từ chối" (`CANCELLED` kèm lý do từ chối bắt buộc). Người duyệt / người từ chối và lý do được ghi vào `appointment_status_histories` (`changed_by_user_id`, `notes`). Gửi thông báo đến Portal khách hàng. | Lễ tân | **M** | UC-17<br>BR-05 |
+| **FR-17** | Tự động quét vắng mặt lịch hẹn (Auto No-Show) | Hệ thống chạy tiến trình ngầm (Cronjob) định kỳ: Nếu thời gian hiện tại vượt quá `appointment_date` + `start_time` + 30 phút mà lịch hẹn `CONFIRMED` chưa check-in tại quầy, tự động cập nhật lịch hẹn sang `NO_SHOW` và ghi 1 dòng `appointment_status_histories` (`changed_by_user_id = NULL`), giải phóng suất giữ chỗ cho khách vãng lai. | Hệ thống | **S** | UC-17<br>EX-01 |
+| **FR-18** | Tiếp nhận ca trễ hẹn sau khi đã No-Show | Khi khách hàng đến muộn sau khi lịch hẹn đã chuyển `NO_SHOW`, Lễ tân bấm tiếp nhận ca trễ hẹn: Hệ thống giữ nguyên trạng thái `NO_SHOW` của lịch hẹn (ghi nhận lịch sử uy tín), đồng thời tạo một đợt khám mới dạng khách vãng lai (`appointment_id = NULL`) và xếp vào hàng đợi sảnh bình thường. | Lễ tân | **S** | UC-19<br>EX-02 |
+
+---
+
+### Phân hệ 4: Tiếp đón Sảnh, Hàng đợi & Phân công Bác sĩ
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-19** | Tiếp nhận thú cưng tại quầy (Check-in) | Cho phép Lễ tân tiếp đón cả 2 luồng khách hàng: Khách có lịch hẹn `CONFIRMED` (chuyển lịch hẹn sang `CHECKED_IN` và sinh đợt khám `pet_visits` tương ứng) hoặc Khách vãng lai Walk-in (tạo đợt khám mới trực tiếp). Đợt khám mới có trạng thái ban đầu là `WAITING`. Hệ thống chặn tạo đợt khám mới nếu thú cưng còn đợt khám chưa `COMPLETED` / `CANCELLED`. | Lễ tân | **M** | UC-19<br>BR-06, BR-09, BR-14 |
+| **FR-20** | Phân loại sàng lọc cấp cứu ban đầu (Triage) | Lễ tân quan sát, đánh giá nhanh tri giác và dấu hiệu nguy kịch (co giật, khó thở dữ dội, chấn thương/chảy máu nhiều do tai nạn). Nếu phát hiện thú cưng nguy kịch, Lễ tân đánh dấu cờ `is_emergency = TRUE` để kích hoạt luồng ưu tiên cấp cứu (việc đo thân nhiệt, cân nặng sẽ do Bác sĩ thực hiện trong phòng khám). | Lễ tân | **M** | UC-19<br>BR-09 |
+| **FR-21** | Hiển thị & Giám sát Hàng đợi khám bệnh sảnh | Hệ thống hiển thị bảng theo dõi hàng đợi khám chung tại sảnh theo thời gian thực, sắp xếp **2 tầng**: (1) Ca cấp cứu (`is_emergency = TRUE`) được tự động đưa lên đầu danh sách kèm viền đỏ nổi bật; (2) các ca còn lại (có hẹn hoặc vãng lai) sắp xếp theo thời gian check-in tăng dần (FIFO). Truy vấn dùng chỉ mục `idx_visits_queue (status, is_emergency, checked_in_at)`. Lịch hẹn chỉ giữ chỗ trong khung giờ, không tạo thêm tầng ưu tiên sau khi đã check-in. | Lễ tân | **M** | UC-20<br>BR-09, BR-10 |
+| **FR-22** | Suy diễn trạng thái phục vụ tức thời của Bác sĩ | Hệ thống tự động tính toán động trạng thái phục vụ tức thời của từng Bác sĩ theo công thức SQL thời gian thực: `BUSY` (nếu có ca `WAITING` đã được gán cho Bác sĩ hoặc ca `IN_PROGRESS`), `AVAILABLE_PRIORITY_CALLBACK` (nếu đang rảnh nhưng có ca `RESULTS_READY` **vừa có kết quả**, nhận biết qua dòng `pet_visit_status_histories` mới nhất có `from_status = 'WAITING_RESULTS'`), hoặc `AVAILABLE` (các trường hợp còn lại, kể cả khi chỉ còn ca đã tạm hoãn theo EX-10). Không lưu trường trạng thái tĩnh. | Hệ thống | **M** | UC-20, UC-21<br>BR-11, BR-12 |
+| **FR-23** | Kích hoạt cơ chế Khóa ưu tiên Bác sĩ (Priority Lock) | Khi một Bác sĩ đang rảnh nhưng có ít nhất 1 ca **vừa** chuyển sang `RESULTS_READY` và chưa được gọi vào (ca đã tạm hoãn theo EX-10 không tính), hệ thống tự động khóa nút phân công ca mới của Bác sĩ này trên màn hình Lễ tân. Nếu Lễ tân cố tình phân công ca mới từ sảnh, hệ thống hiển thị cảnh báo từ chối. | Hệ thống | **M** | UC-20, UC-21<br>BR-11, EX-05 |
+| **FR-24** | Điều phối & Phân công Bác sĩ vào phòng khám | Lễ tân chọn ca khám trong hàng đợi sảnh, chọn một Bác sĩ đang ở trạng thái `AVAILABLE` và bấm "Phân công vào phòng". Hệ thống cập nhật `doctor_id` vào đợt khám (ca vẫn `WAITING`), Bác sĩ được tính là `BUSY` ngay để chặn phân công trùng, và tự động hiển thị thông báo mời thú cưng vào phòng (`users.room_number` của Bác sĩ) trên màn hình sảnh và ứng dụng. Khi ca chưa bắt đầu khám, Lễ tân được **đổi Bác sĩ** hoặc **gỡ phân công** (`doctor_id = NULL`, ca giữ nguyên vị trí trong hàng đợi theo `checked_in_at`) nếu khách tạm ra ngoài; Bác sĩ cũ tự trở về `AVAILABLE`. | Lễ tân | **M** | UC-21<br>BR-10, BR-11, BR-13 |
+| **FR-25** | Kiểm soát xung đột phân công thời gian thực | Tại thời điểm Lễ tân bấm phân công, hệ thống kiểm tra lại trạng thái Bác sĩ trong giao dịch: Nếu Bác sĩ vừa được lễ tân khác phân công hoặc vừa bấm nhận ca khác (`BUSY`), hệ thống từ chối giao dịch và yêu cầu chọn bác sĩ khác. | Hệ thống | **M** | UC-21<br>EX-05 |
+| **FR-26** | Hủy tiếp nhận ca khám tại sảnh | Cho phép Lễ tân hủy đợt khám khi khách hàng chờ lâu xin về hoặc có việc bận đột xuất: Cập nhật `pet_visits.status = 'CANCELLED'`, ghi lý do hủy vào `notes` của dòng `pet_visit_status_histories` (bắt buộc), rút ca khỏi hàng đợi sảnh. Nếu ca đã được gán Bác sĩ, Bác sĩ tự động được giải phóng. | Lễ tân | **S** | UC-20<br>EX-03 |
+
+---
+
+### Phân hệ 5: Khám Lâm sàng Sơ bộ & Chỉ định Dịch vụ Kỹ thuật (GĐ 1)
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-27** | Bác sĩ tiếp nhận bệnh nhân & Bắt đầu khám (GĐ 1) | Khi thú cưng bước vào phòng, Bác sĩ bấm "Bắt đầu khám". Hệ thống cập nhật `pet_visits.status = 'IN_PROGRESS'` và ghi 1 dòng `pet_visit_status_histories` (thời điểm bắt đầu khám = `created_at` của dòng này); tự động tạo chỉ định dịch vụ khám (`EXAMINATION`) kèm hóa đơn dịch vụ `PENDING`; giữ Bác sĩ ở `BUSY` và mở Bệnh án điện tử. Chỉ cho phép khi đợt khám đã được gán cho chính Bác sĩ này và Bác sĩ không có ca `IN_PROGRESS` khác. | Bác sĩ | **M** | UC-22<br>BR-12, BR-20 |
+| **FR-28** | Tra cứu Lịch sử bệnh án điện tử tại phòng khám | Cho phép Bác sĩ xem toàn bộ lịch sử khám bệnh cũ của thú cưng ngay trên giao diện khám: tiền sử bệnh mãn tính, dị ứng thuốc, các đợt tiêm vaccine trước đây, kết quả xét nghiệm cũ và các đơn thuốc đã dùng. | Bác sĩ | **M** | UC-22 |
+| **FR-29** | Thăm khám lâm sàng & Đo sinh hiệu sơ bộ | Bác sĩ trực tiếp đo cân nặng (`weight_at_visit`), thân nhiệt (`temperature`) cho thú cưng tại phòng khám; kiểm tra tim phổi, da, niêm mạc, hạch bạch huyết; nhập ghi chú triệu chứng lâm sàng và nhận định chẩn đoán sơ bộ ban đầu. | Bác sĩ | **M** | UC-22<br>BR-20 |
+| **FR-30** | Rẽ nhánh Chốt ca khám thông thường / Tiêm phòng / Thủ thuật | Đối với ca bệnh nhẹ không cần cận lâm sàng hoặc ca tiêm phòng/tẩy giun/thủ thuật: Cho phép Bác sĩ chỉ định các **dịch vụ thực hiện tại phòng** (`VACCINATION`, `DEWORMING`, `EXTERNAL_PARASITE`, `INJECTION_INFUSION`, `PROCEDURE`, `SURGERY`; mỗi dịch vụ sinh 1 hóa đơn dịch vụ `PENDING`), thực hiện và đánh dấu "Đã thực hiện", chẩn đoán xác định, kê đơn thuốc ngoại trú (nếu có), dặn dò và bấm "Chốt đợt khám & Chuyển thanh toán". Ca chuyển thẳng sang `WAITING_PAYMENT`, khóa hồ sơ bệnh án và giải phóng Bác sĩ. | Bác sĩ | **M** | UC-22_23<br>UC-30_33 |
+| **FR-31** | Chỉ định Dịch vụ Kỹ thuật cận lâm sàng | Cho phép Bác sĩ chọn một hoặc nhiều dịch vụ kỹ thuật từ danh mục (Xét nghiệm máu tổng quát, Siêu âm ổ bụng, Chụp X-quang kỹ thuật số). Hệ thống hiển thị đơn giá, thuế suất và chi phí tạm tính của các dịch vụ được chọn để Bác sĩ tư vấn chủ nuôi. | Bác sĩ | **M** | UC-23<br>BR-20, BR-25 |
+| **FR-32** | Lập hóa đơn dịch vụ & Snapshot đơn giá bất biến | Mỗi khi một dịch vụ được chỉ định (dịch vụ khám lúc "Bắt đầu khám", dịch vụ cận lâm sàng lúc "Xác nhận chỉ định", dịch vụ tại phòng lúc Bác sĩ chọn), hệ thống tạo trong **cùng giao dịch** 1 dòng `visit_service_details` và đúng 1 dòng `service_invoices` (`payment_status = 'PENDING'`, mã `invoice_code` duy nhất), snapshot `unit_price = services.price` và `vat_rate = services.vat_rate`. Đơn giá này bất biến kể cả khi sau này Admin thay đổi bảng giá. `visit_service_details` không chứa giá. | Hệ thống | **M** | UC-22_23<br>BR-19, BR-25, BR-27 |
+| **FR-33** | Đẩy phiếu chỉ định liên phòng & Giải phóng Bác sĩ | Yêu cầu Bác sĩ đã nhập `weight_at_visit`, `temperature`. Hệ thống lưu các dòng chỉ định dịch vụ cận lâm sàng ở trạng thái `PENDING` (kèm hóa đơn theo FR-32), chuyển dịch vụ khám của GĐ 1 sang `COMPLETED`, tự động đẩy phiếu vào hàng đợi phòng Lab (`LABORATORY`) và/hoặc phòng CĐHA (`IMAGING`) tương ứng; cập nhật `pet_visits.status = 'WAITING_RESULTS'`, **giải phóng trạng thái Bác sĩ về `AVAILABLE`** để đón ca khám mới từ sảnh mà không bị lãng phí thời gian chờ kết quả. | Hệ thống | **M** | UC-23<br>BR-12 |
+| **FR-34** | Hủy ca khám tại phòng GĐ 1 do chuyển viện | Nếu trong lúc thăm khám phát hiện thú cưng bị bệnh quá nặng cần chuyển viện chuyên khoa tuyến trên hoặc chủ nuôi từ chối tiếp tục điều trị: Cho phép Bác sĩ bấm "Hủy ca / Chuyển viện cấp cứu" (không thu phí): chỉ được phép khi **chưa có dịch vụ tại phòng nào `COMPLETED`** (dịch vụ đã thực hiện thì phải thu tiền: Bác sĩ chốt ca bình thường); mọi dịch vụ còn lại (dịch vụ khám đang `IN_PROGRESS`, dịch vụ tại phòng chưa làm) chuyển `CANCELLED` kèm hóa đơn dịch vụ tương ứng, cập nhật `pet_visits.status = 'CANCELLED'`, ghi lý do vào `pet_visit_status_histories.notes` và giải phóng Bác sĩ về `AVAILABLE`. Nếu vẫn thu phí khám, Bác sĩ chốt ca bình thường (FR-30) với chẩn đoán "chuyển viện". | Bác sĩ | **S** | UC-22_23 |
+
+---
+
+### Phân hệ 6: Quản lý & Thực hiện Cận lâm sàng (Lab & CĐHA)
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-35** | Quản lý 2 Hàng đợi Cận lâm sàng độc lập | Hệ thống duy trì 2 hàng đợi thực hiện chuyên môn riêng biệt: Hàng đợi Phòng Xét nghiệm (Lab) và Hàng đợi Phòng Chẩn đoán hình ảnh (CĐHA). Hai phòng hoạt động hoàn toàn song song, không phòng nào bị khóa hay phụ thuộc cứng vào phòng kia. | LAB_TECHNICIAN, IMAGING_TECHNICIAN | **M** | UC-25, UC-26 |
+| **FR-36** | Điều phối ca có chỉ định đồng thời cả 2 phòng | Đối với ca khám được chỉ định cả Xét nghiệm và Chẩn đoán hình ảnh: Hệ thống hướng dẫn khách lấy máu bên phòng Lab trước (2-3 phút); trong lúc máy phân tích huyết học chạy tự động (15-20 phút), khách đưa thú cưng sang phòng CĐHA siêu âm/chụp X-quang (10-15 phút). KTV Lab bấm "Đã lấy mẫu" ngay sau khi lấy mẫu (ghi `visit_service_detail_histories.action = 'SAMPLE_COLLECTED'`). Màn hình CĐHA hiển thị huy hiệu liên phòng: `[Đang lấy máu bên phòng Lab]` (dịch vụ Lab `IN_PROGRESS`, `action` mới nhất là `START_PROCESSING`) hoặc `[Đã lấy máu, sẵn sàng chụp]` (`action` mới nhất là `SAMPLE_COLLECTED`). | Hệ thống, LAB_TECHNICIAN, IMAGING_TECHNICIAN | **M** | UC-25_26 |
+| **FR-37** | Tiếp nhận & Bắt đầu làm dịch vụ kỹ thuật | Kỹ thuật viên bấm nút "Mời vào phòng" (hệ thống gửi thông báo gọi lượt, dịch vụ vẫn `PENDING`). Khi thú cưng bước vào phòng lấy ven hoặc lên bàn chụp, nhân viên bấm "Bắt đầu thực hiện", dịch vụ chuyển sang `IN_PROGRESS` (ghi lịch sử `action = 'START_PROCESSING'`) để bắt đầu tiêu hao vật tư. | LAB_TECHNICIAN, IMAGING_TECHNICIAN | **M** | UC-25_26 |
+| **FR-38** | Cơ chế Quản lý ca vắng mặt tại phòng CLS (Missed Turn) | Nếu thông báo gọi 3 lần khách không có mặt, nhân viên bấm "Tạm hoãn do vắng mặt": Dịch vụ giữ nguyên `PENDING`, rút khỏi hàng đợi chính đưa vào tab *"Ca tạm hoãn do vắng mặt"*, gọi ca tiếp theo ngay để không làm treo phòng máy; ghi lịch sử `action = 'POSTPONED'`; đồng thời gửi thông báo đến ứng dụng / Portal của chủ nuôi (hệ thống không tích hợp SMS). | LAB_TECHNICIAN, IMAGING_TECHNICIAN | **M** | UC-25_26<br>EX-06 |
+| **FR-39** | Kích hoạt lại ca tạm hoãn khi khách quay lại (Recall) | Khi khách hàng quay lại và báo có mặt (hoặc bấm "Tôi đã có mặt" trên ứng dụng): Dịch vụ đổi màu xanh nhấp nháy, tự động ghim vào vị trí **"Ưu tiên kế tiếp" (Next In Line)**. Hệ thống ghi lịch sử `action = 'RECALL'`. Nhân viên bấm Recall để mời vào phòng ngay sau khi kết thúc ca đang làm dở. | LAB_TECHNICIAN, IMAGING_TECHNICIAN | **M** | UC-25_26<br>EX-07 |
+| **FR-40** | Nhập kết quả Xét nghiệm & Đối chiếu tham chiếu loài | Hệ thống hiển thị danh sách chỉ số thuộc gói xét nghiệm đã chỉ định (`service_lab_test_items`); Kỹ thuật viên nhập giá trị đo từ máy (WBC, RBC, HGB, PLT...). Hệ thống lấy khoảng tham chiếu sinh lý của loài tương ứng (Chó/Mèo) để đánh giá và bôi màu trực quan: Thấp `LOW` (Vàng), Bình thường `NORMAL` (Xanh lá), Cao `HIGH` (Đỏ cảnh báo nguy hiểm). Nhãn đánh giá được **tính khi hiển thị** (enum `LabEvaluation` ở tầng ứng dụng), không lưu cột riêng. | LAB_TECHNICIAN | **M** | UC-25_26<br>BR-23 |
+| **FR-41** | Snapshot Khoảng tham chiếu sinh lý bất biến | Khi lưu kết quả xét nghiệm, hệ thống sao lưu cố định `min_value_snapshot` và `max_value_snapshot` tại thời điểm xét nghiệm vào từng dòng kết quả `lab_test_results`. Đảm bảo tính pháp lý lịch sử không bị ảnh hưởng nếu sau này cấu hình tham chiếu thay đổi. | Hệ thống | **M** | UC-25_26<br>BR-24 |
+| **FR-42** | Tải ảnh đính kèm & Nhập kết luận Chẩn đoán hình ảnh | Kỹ thuật viên / Bác sĩ CĐHA tải các tệp ảnh chụp thực tế (X-quang, Siêu âm định dạng JPG/PNG/DICOM) lên hệ thống, nhập mô tả giải phẫu, nhận xét hình thái học và kết luận chẩn đoán hình ảnh. Lưu vào `imaging_results` và `imaging_attachments`. | IMAGING_TECHNICIAN | **M** | UC-25_26 |
+| **FR-43** | Xử lý Khách xin hủy 1 trong 2 dịch vụ cận lâm sàng | Nếu khách hàng xin hủy dịch vụ chụp X-quang vì thú cưng quá hung dữ hoặc không đủ kinh phí: Nhân viên chọn "Hủy dịch vụ" kèm lý do $\rightarrow$ Trong cùng giao dịch, dịch vụ chuyển sang `CANCELLED` **và hóa đơn dịch vụ tương ứng chuyển `CANCELLED`** (không cho hủy nếu hóa đơn đã `PAID`). Hệ thống kiểm tra các dịch vụ còn lại (xét nghiệm máu) đã `COMPLETED` thì tự động kích hoạt ca có kết quả. | LAB_TECHNICIAN, IMAGING_TECHNICIAN, Hệ thống | **M** | UC-25_26<br>EX-08 |
+| **FR-44** | Đánh giá hoàn tất cận lâm sàng & Kích hoạt Khóa ưu tiên | Mỗi khi một dịch vụ chuyển `COMPLETED` hoặc `CANCELLED`, hệ thống kiểm tra: Nếu số dịch vụ nhóm `LABORATORY` / `IMAGING` của ca còn ở `PENDING` hoặc `IN_PROGRESS` bằng 0, tự động cập nhật `pet_visits.status = 'RESULTS_READY'` (dòng lịch sử có `changed_by_user_id = NULL`), tự động đẩy ca vào Hàng đợi ưu tiên của Bác sĩ khám chính, hiển thị Notification Badge trên màn hình Bác sĩ và kích hoạt **Khóa ưu tiên (Priority Lock)**. | Hệ thống | **M** | UC-25_26<br>BR-11, BR-12 |
+| **FR-45** | Xử lý Khách bỏ về giữa chừng khi chưa có kết quả | Nếu khách hàng tự ý bỏ về khi cận lâm sàng chưa xong và Lễ tân gọi điện xác nhận khách không quay lại: Lễ tân chọn "Đóng ca / Khách bỏ về" (chỉ khi không có dịch vụ nào đang `IN_PROGRESS`). Dịch vụ còn `PENDING` bị hủy kèm hóa đơn; hóa đơn của dịch vụ đã làm (khám, CLS đã `COMPLETED`) giữ `PENDING` làm công nợ; `pet_visits.status` chuyển `WAITING_RESULTS` $\rightarrow$ `COMPLETED`. Không dùng `CANCELLED` để tránh mất doanh thu dịch vụ đã thực hiện. | Lễ tân | **S** | UC-25_26<br>EX-11 |
+
+---
+
+### Phân hệ 7: Hội chẩn Kết quả, Chẩn đoán Xác định & Kê đơn (GĐ 2)
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-46** | Bác sĩ đón ca có kết quả vào phòng (GĐ 2) | Khi Bác sĩ đang rảnh (hoặc ngay khi rời ca hiện tại), màn hình hiển thị hộp thoại nổi bật ca tái khám có kết quả. Bác sĩ bấm "Mời bệnh nhân vào phòng": Hệ thống hiển thị thông báo mời vào phòng trên màn hình Bác sĩ và ứng dụng, cập nhật `pet_visits.status = 'IN_PROGRESS'` (Giai đoạn 2), chuyển Bác sĩ sang `BUSY` và mở Bệnh án tổng hợp. | Bác sĩ | **M** | UC-30<br>BR-12 |
+| **FR-47** | Xử lý Gọi lại GĐ 2 nhưng Khách vắng mặt | Nếu thông báo gọi 2-3 lần khách chưa vào (do khách ra ngoài nghe điện thoại): Bác sĩ bấm nút *"Tạm hoãn / Gọi ca tiếp"*. Ca khám chuyển từ `IN_PROGRESS` về `RESULTS_READY` và vào tab "Ca chờ tái khám / Đã hoãn" của Bác sĩ; dòng lịch sử có `from_status = 'IN_PROGRESS'` đánh dấu ca đã hoãn nên **không bật lại Khóa ưu tiên** $\rightarrow$ Bác sĩ trở về `AVAILABLE` để Lễ tân có thể phân ca mới từ sảnh. Khi khách quay lại và Bác sĩ đang rảnh, Bác sĩ bấm Recall (ca chuyển lại `IN_PROGRESS`). | Bác sĩ | **M** | UC-30<br>EX-10 |
+| **FR-48** | Xử lý Khách bỏ về hẳn không quay lại đọc kết quả | Nếu khách bỏ về hẳn không quay lại: Bác sĩ hoặc Lễ tân chọn thao tác *"Đóng ca / Khách bỏ về"*. Hệ thống cập nhật `pet_visits.status = 'COMPLETED'` (khóa vĩnh viễn kết quả vào lịch sử bệnh án) và gỡ Khóa ưu tiên. **Không tạo hóa đơn mới**: các hóa đơn dịch vụ đã lập từ lúc chỉ định (khám, cận lâm sàng đã làm) giữ `PENDING` làm công nợ để thu bù lần sau (FR-59). | Bác sĩ, Lễ tân | **M** | UC-30<br>EX-11 |
+| **FR-49** | Màn hình Bệnh án điện tử Tổng hợp đa chiều | Giao diện Giai đoạn 2 tổng hợp đầy đủ trên một màn hình: Các chỉ số sinh hiệu đo ở GĐ 1, bảng chỉ số xét nghiệm máu có tô màu cảnh báo bất thường, hình ảnh chụp X-quang/siêu âm thu phóng được và nhận xét hình thái học. | Bác sĩ | **M** | UC-30 |
+| **FR-50** | Ghi nhận Chẩn đoán xác định & Phác đồ điều trị | Cho phép Bác sĩ tổng hợp kết quả cận lâm sàng với triệu chứng lâm sàng ban đầu; nhập Chẩn đoán xác định, Phác đồ điều trị và Lời dặn dò chế độ chăm sóc cho chủ nuôi. | Bác sĩ | **M** | UC-30<br>BR-20 |
+| **FR-51** | Kê đơn thuốc điện tử (Electronic Prescription) | Cho phép Bác sĩ tìm kiếm thuốc trong danh mục tủ thuốc phòng khám, hiển thị hoạt chất, đơn vị tính, đơn giá bán tham khảo và số lượng tồn kho hiện tại. Bác sĩ nhập số lượng kê (`quantity`), liều lượng (`dosage`), tần suất (`frequency`), số ngày sử dụng (`duration_days`) và hướng dẫn. Mỗi thuốc chỉ xuất hiện 1 lần trong một đơn. | Bác sĩ | **M** | UC-31<br>BR-18, BR-20 |
+| **FR-52** | Cảnh báo tồn kho khi kê đơn | Hệ thống so sánh số lượng kê với `medicines.stock_quantity` hiện tại. Nếu không đủ, hệ thống **chỉ cảnh báo** (khách có thể mua thuốc ngoài); Bác sĩ chọn giữ nguyên hoặc giảm số lượng / kê thuốc thay thế. Tồn kho chỉ bị kiểm tra chặt khi bán thuốc (FR-63, FR-64). | Hệ thống | **M** | UC-31<br>BR-30, EX-13 |
+| **FR-53** | Đơn thuốc là chỉ định chuyên môn (không giá, không trạng thái) | Khi Bác sĩ nhấn "Lưu đơn thuốc", hệ thống lưu `prescriptions` (tối đa 1 đơn / đợt khám) và `prescription_items` **không kèm giá và không có trạng thái cấp phát**. Đơn thuốc có thể in hoặc xem trên Portal để khách mua ngoài. Giá thuốc chỉ được chốt khi khách mua tại phòng khám (FR-61, `medicine_invoice_items`). | Hệ thống | **M** | UC-31, UC-39<br>BR-18, BR-32 |
+| **FR-54** | Chốt đợt khám & Khóa hồ sơ bệnh án chuyên môn 1 chiều | Bác sĩ giải thích tình trạng bệnh cho chủ nuôi, hướng dẫn dùng thuốc và nhấn "Chốt đợt khám / Chuyển thanh toán". Điều kiện: đã nhập `diagnosis` và mọi dịch vụ tại phòng đã `COMPLETED` hoặc `CANCELLED` (EX-12). Hệ thống cập nhật `pet_visits.status = 'WAITING_PAYMENT'` và ghi 1 dòng `pet_visit_status_histories` (thời điểm chốt ca), **khóa toàn bộ quyền chỉnh sửa chuyên môn của bệnh án**, giải phóng Bác sĩ về `AVAILABLE` và đẩy ca sang màn hình Thu ngân. Không lập thêm hóa đơn ở bước này. Khi phát hiện sai sót trước khi ca `COMPLETED`, Bác sĩ phụ trách hoặc Admin có thể "Mở lại hồ sơ" (`WAITING_PAYMENT` $\rightarrow$ `IN_PROGRESS`, lý do bắt buộc ghi vào lịch sử) rồi chốt lại. Nếu đơn thuốc đã có hóa đơn thuốc chưa hủy (`PENDING` hoặc `PAID`) thì không được sửa đơn thuốc. | Bác sĩ | **M** | UC-30_31_33<br>EX-12 |
+
+---
+
+### Phân hệ 8: Thanh toán Hóa đơn Dịch vụ & Bán thuốc theo Đơn
+
+> **Nguyên tắc:** Mỗi dịch vụ được chỉ định có 1 hóa đơn dịch vụ (`service_invoices`, thuộc `clinical-service`) lập ngay lúc chỉ định. Thuốc có hóa đơn thuốc (`medicine_invoices`, thuộc `billing-pharmacy-service`) chỉ lập khi khách chọn mua tại phòng khám. **Không lưu tổng tiền / thành tiền**; số tiền phải trả = `quantity × unit_price × (1 + vat_rate) − discount_amount`, tính qua VIEW `v_service_invoice_amounts` và `v_medicine_invoice_amounts`.
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-55** | Bảng kê các hóa đơn dịch vụ của ca khám | Khi Thu ngân chọn một ca `WAITING_PAYMENT` (hoặc ca đã `COMPLETED` còn công nợ), hệ thống hiển thị danh sách `service_invoices` của ca: mã hóa đơn, tên dịch vụ, số lượng, đơn giá và thuế suất đã snapshot, giảm giá, số tiền phải trả (từ VIEW) và trạng thái. Tổng số tiền cần thu = tổng số tiền của các hóa đơn đang `PENDING`; hóa đơn `CANCELLED` hiển thị mờ, không tính tiền. Tiền thuốc không nằm trong bảng kê này. | Hệ thống, Thu ngân | **M** | UC-34<br>BR-19, BR-21 |
+| **FR-56** | Áp dụng giảm giá trên từng hóa đơn | Thu ngân nhập `discount_amount` trên từng hóa đơn dịch vụ (hoặc trên hóa đơn thuốc). Hệ thống kiểm tra `discount_amount <=` số tiền trước giảm của chính hóa đơn đó; vi phạm thì cảnh báo và chặn lưu (EX-14). Số tiền sau giảm được tính lại qua VIEW, **không lưu cột thành tiền hay tổng tiền**. | Thu ngân | **M** | UC-34, UC-36<br>EX-14 |
+| **FR-57** | Thanh toán ngoài quầy, không lưu phương thức | Khách hàng thanh toán bên ngoài quầy (tiền mặt hoặc chuyển khoản riêng). Sau khi nhận đủ tiền, Lễ tân/Thu ngân chỉ cần nhấn "Xác nhận thanh toán" trên hệ thống; hệ thống không tích hợp cổng thanh toán và không lưu phương thức thanh toán. | Thu ngân | **M** | UC-35, UC-36 |
+| **FR-58** | In Phiếu tạm tính & Phiếu thu | Cho phép Thu ngân in Bảng kê tạm tính các hóa đơn dịch vụ để khách đối chiếu trước khi chuyển tiền; in phiếu thu dịch vụ liệt kê các mã hóa đơn đã thanh toán (`invoice_code`, ví dụ `SINV-YYYY-XXXX`) và in hóa đơn thuốc (`MINV-YYYY-XXXX`) kèm phiếu hướng dẫn dùng thuốc. | Thu ngân | **M** | UC-34, UC-35, UC-36 |
+| **FR-59** | Xác nhận thanh toán hóa đơn dịch vụ | Thu ngân chọn các hóa đơn khách thanh toán (mặc định chọn tất cả hóa đơn `PENDING` của ca; được thu một phần) và nhấn "Xác nhận thanh toán": trong một giao dịch, hệ thống cập nhật từng hóa đơn đã chọn sang `payment_status = 'PAID'`, ghi `paid_at = NOW()`, `cashier_id = :id`; dùng cột `version` (khóa lạc quan) để chặn thu trùng khi hai người thao tác cùng lúc. Áp dụng cả khi thu công nợ của ca đã đóng theo EX-11 (trạng thái ca giữ nguyên `COMPLETED`). | Thu ngân | **M** | UC-35<br>BR-19, BR-27 |
+| **FR-60** | Tự động hoàn tất ca khám khi đủ hóa đơn dịch vụ | Ngay trong giao dịch của FR-59, nếu **mọi `service_invoices` của ca đều `PAID` hoặc `CANCELLED`** và ca đang `WAITING_PAYMENT`, hệ thống cập nhật `pet_visits.status = 'COMPLETED'` và ghi 1 dòng `pet_visit_status_histories` (thời điểm hoàn tất). Việc khách có mua thuốc hay không **không ảnh hưởng** điều kiện này. Vì `service_invoices` và `pet_visits` cùng nằm trong CSDL của `clinical-service`, đây là giao dịch cục bộ, không cần sự kiện bất đồng bộ. | Hệ thống | **M** | UC-35<br>BR-28 |
+| **FR-61** | Lựa chọn mua thuốc & Lập hóa đơn thuốc | Nếu ca có đơn thuốc, sau khi thanh toán dịch vụ hệ thống hỏi khách có mua thuốc tại phòng khám không. **Không mua:** in đơn thuốc cho khách mua ngoài, không lập hóa đơn. **Có mua:** Thu ngân chọn thuốc và số lượng khách mua (được mua một phần, số lượng ≤ số lượng kê); hệ thống tạo `medicine_invoices` (`PENDING`) và các `medicine_invoice_items` với snapshot `unit_price = medicines.sale_price`, `vat_rate = medicines.vat_rate`. Điều kiện: ca đã `WAITING_PAYMENT` hoặc `COMPLETED` (đơn thuốc đã khóa) và đơn chưa có hóa đơn thuốc. Khi hóa đơn còn `PENDING`, Thu ngân được **sửa dòng hóa đơn thuốc** (bỏ thuốc, giảm số lượng; vẫn ≤ số lượng kê, giảm giá được kiểm tra lại). Khách đổi ý không mua thì Thu ngân hủy hóa đơn thuốc (`CANCELLED`, tồn kho không đổi); hủy là kết thúc, phần thuốc khách mua ngoài theo đơn in. | Thu ngân | **M** | UC-36<br>BR-26, BR-32 |
+| **FR-62** | Chuẩn bị thuốc từ tủ thuốc | Thu ngân mở tủ thuốc phòng khám, lấy đúng chủng loại và đủ số lượng theo hóa đơn thuốc, kiểm tra hạn sử dụng trên vỉ/lọ, dán nhãn hướng dẫn liều dùng trước khi xác nhận thanh toán. | Thu ngân | **M** | UC-36 |
+| **FR-63** | Giao dịch Thu tiền thuốc & Trừ kho an toàn | Thu ngân nhấn "Xác nhận thanh toán & Xuất thuốc". Hệ thống thực thi một giao dịch `@Transactional` tại `billing-pharmacy-service`: với mỗi dòng thuốc, `UPDATE medicines SET stock_quantity = stock_quantity - :qty WHERE id = :id AND stock_quantity >= :qty` $\rightarrow$ ghi `inventory_transactions` (`transaction_type = 'EXPORT_SALE'`, `quantity = -:qty`, `medicine_invoice_id`) $\rightarrow$ cập nhật `medicine_invoices.payment_status = 'PAID'`, `paid_at`, `cashier_id`. Trạng thái đợt khám không thay đổi. | Hệ thống | **M** | UC-36<br>BR-29 |
+| **FR-64** | Xử lý thiếu tồn kho tại thời điểm bán (Race Condition) | Nếu một câu `UPDATE` ở FR-63 ảnh hưởng 0 dòng (tồn kho vừa bị quầy khác bán hết), hệ thống **Rollback toàn bộ giao dịch**: không trừ kho, không ghi nhật ký, hóa đơn thuốc giữ `PENDING`. Hệ thống báo thuốc thiếu; Thu ngân **sửa hóa đơn thuốc đang `PENDING`** (giảm số lượng / bỏ thuốc thiếu, FR-61) rồi xác nhận lại, hoặc hủy hóa đơn để khách mua ngoài. Không phát sinh nghiệp vụ hoàn tiền vì chưa có khoản nào `PAID`. | Hệ thống | **M** | UC-36<br>BR-30, EX-15 |
+| **FR-65** | Chống bán / xuất kho lặp lại | Mỗi đơn thuốc có tối đa 1 hóa đơn thuốc nhờ ràng buộc `medicine_invoices.prescription_id UNIQUE`; hệ thống kiểm tra trước và thông báo *"Đơn thuốc này đã có hóa đơn thuốc"* (kể cả hóa đơn đã hủy – khách đã chọn mua ngoài). Việc xác nhận chỉ chạy khi hóa đơn đang `PENDING`, kết hợp cột `version`, nên bấm đúp hoặc xác nhận lại hóa đơn đã `PAID` đều bị chặn. Không trừ kho lần 2. | Hệ thống | **M** | UC-36<br>BR-31, EX-16 |
+| **FR-66** | Quản lý Nhập kho & Cân chỉnh kho thuốc | Cho phép Quản trị viên nhập thêm thuốc vào kho (`transaction_type = 'IMPORT'`, `quantity` dương) và cân chỉnh kho sau kiểm kê (`ADJUSTMENT`, `quantity` dương hoặc âm). Mỗi giao dịch cập nhật `medicines.stock_quantity` trong cùng giao dịch, đảm bảo bất biến `stock_quantity = SUM(inventory_transactions.quantity)`. | Admin | **M** | UC-37 |
+
+---
+
+### Phân hệ 9: Tra cứu Bệnh án Điện tử & Báo cáo Thống kê
+
+| Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **FR-67** | Tra cứu Lịch sử bệnh án điện tử trọn đời của Thú cưng | Cho phép Bác sĩ và Lễ tân tra cứu toàn bộ các đợt khám trong quá khứ của một thú cưng theo thời gian (Timeline): ngày khám, bác sĩ phụ trách, chẩn đoán xác định, kết quả xét nghiệm máu chi tiết, ảnh chụp X-quang/siêu âm và đơn thuốc đã cấp. Dữ liệu bệnh án không bao giờ bị xóa. | Bác sĩ, Lễ tân | **M** | UC-22, UC-38<br>BR-15 |
+| **FR-68** | Cổng thông tin Tra cứu Bệnh án cho Chủ nuôi (Portal) | Cho phép Chủ thú cưng đăng nhập tài khoản cá nhân, xem hồ sơ danh sách thú cưng của mình và tra cứu đầy đủ kết quả khám bệnh, hình ảnh chẩn đoán và đơn thuốc / hướng dẫn dùng thuốc điện tử (dùng để mua thuốc ngoài nếu không mua tại phòng khám) mọi lúc mọi nơi. | Chủ nuôi | **S** | UC-38, UC-39 |
+| **FR-69** | Báo cáo Thống kê Doanh thu phòng khám | Cho phép Admin xem báo cáo doanh thu theo ngày, tuần, tháng, quý hoặc khoảng thời gian tùy chọn; phân rã doanh thu chi tiết theo 2 nguồn lấy từ 2 loại hóa đơn: **Doanh thu Dịch vụ** = tổng số tiền các `service_invoices` `PAID` (VIEW `v_service_invoice_amounts`, lọc theo `paid_at`, có thể nhóm theo `services.category`) và **Doanh thu Bán thuốc** = tổng số tiền các `medicine_invoices` `PAID` (VIEW `v_medicine_invoice_amounts`). Thống kê thêm công nợ (hóa đơn dịch vụ `PENDING` của ca đã `COMPLETED`). Hóa đơn `CANCELLED` không tính doanh thu. Chỉ mục hỗ trợ: `idx_si_status_paid`, `idx_mi_status_paid`. Hai nguồn nằm ở 2 service khác nhau nên báo cáo tổng hợp gọi API của từng service rồi cộng ở tầng ứng dụng. | Admin | **M** | UC-08 |
+| **FR-70** | Báo cáo Hiệu suất vận hành phòng khám | Cho phép Admin xem các chỉ số vận hành: Tổng số lượt khám, tỷ lệ ca khám thông thường vs ca có làm cận lâm sàng, số ca hoàn tất (`COMPLETED`), số ca hủy (`CANCELLED`), tỷ lệ bỏ hẹn (`NO_SHOW`) và số lượng ca khám phụ trách của từng Bác sĩ. | Admin | **S** | UC-08 |
+
+---
+
+## 3. YÊU CẦU PHI CHỨC NĂNG (NON-FUNCTIONAL REQUIREMENTS - NFR)
+
+> **Mục tiêu:** Tập trung vào các yêu cầu chất lượng phần mềm thực tế, cốt lõi, phù hợp với phạm vi Đồ án Tốt nghiệp ngành Công nghệ Thông tin; loại bỏ các chỉ số đo lường doanh nghiệp phức tạp (P95/P99, stress test quy mô lớn) để tập trung vào tính khả thi, tính toàn vẹn dữ liệu, hiệu năng cơ bản và bảo mật hệ thống.
+
+---
+
+### Danh mục 8 Yêu cầu Phi chức năng chuẩn Đồ án Tốt nghiệp
+
+| Mã NFR | Nhóm Yêu cầu | Mô tả chi tiết yêu cầu kỹ thuật | Giải pháp kỹ thuật / Tiêu chí nghiệm thu đồ án |
+| :---: | :--- | :--- | :--- |
+| **NFR-01** | **Hiệu năng cơ bản (Performance)** | Các thao tác cơ bản như tra cứu hồ sơ khách hàng, tải danh sách hàng đợi khám, mở hồ sơ bệnh án và tìm kiếm danh mục thuốc/dịch vụ phản hồi nhanh chóng, không gây trễ hoặc đơ giao diện. | Thời gian phản hồi $\le 2.0\text{ giây}$ cho các thao tác tải trang và truy vấn dữ liệu thông thường trong môi trường mạng thử nghiệm/demo. |
+| **NFR-02** | **Bảo mật tài khoản & Xác thực (Authentication)** | Bảo mật thông tin đăng nhập của người dùng. Mật khẩu không được lưu dưới dạng văn bản thô (plaintext). Phiên làm việc được quản lý bằng Token an toàn có thời hạn: Access Token hết hạn sau 30 phút; khi đăng xuất, Refresh Token bị thu hồi nên không thể lấy Access Token mới. | Sử dụng thuật toán **BCrypt** để băm mật khẩu người dùng trước khi lưu vào CSDL; áp dụng cơ chế xác thực không trạng thái qua **JSON Web Token (JWT)**. |
+| **NFR-03** | **Phân quyền người dùng (Role-Based Access Control - RBAC)** | Hệ thống phân quyền chặt chẽ theo 6 vai trò người dùng (`ADMIN`, `RECEPTIONIST`, `VETERINARIAN`, `LAB_TECHNICIAN`, `IMAGING_TECHNICIAN`, `PET_OWNER`). Mỗi vai trò chỉ được phép truy cập và thực hiện đúng các chức năng thuộc phạm vi quyền hạn của mình. | Chặn quyền tại cả tầng Frontend (ẩn/hiện menu, nút bấm) và tầng Backend (kiểm tra token/role trước khi xử lý request API). |
+| **NFR-04** | **Toàn vẹn giao dịch (ACID Transactions)** | Các nghiệp vụ cập nhật dữ liệu quan trọng liên quan đến tài chính và kho hàng bắt buộc phải đảm bảo tính nguyên tử (Atomicity): (1) chỉ định dịch vụ + lập hóa đơn dịch vụ; (2) hủy dịch vụ + hủy hóa đơn; (3) thanh toán hóa đơn dịch vụ + hoàn tất ca khám; (4) thanh toán hóa đơn thuốc + trừ kho + ghi nhật ký kho. Nếu có lỗi phát sinh giữa chừng, toàn bộ giao dịch phải được khôi phục về trạng thái ban đầu. | Mỗi nhóm nghiệp vụ trên nằm trọn trong CSDL của một service nên dùng giao dịch cục bộ (`@Transactional` của Spring); trừ kho nguyên tử bằng `UPDATE ... WHERE stock_quantity >= :qty`; chống cập nhật đồng thời bằng khóa lạc quan (`version`). |
+| **NFR-05** | **Giao diện thân thiện & Công thái học (Usability & Responsive)** | Giao diện đồ họa trực quan, hiện đại, dễ thao tác cho nhân viên phòng khám; cung cấp thông báo rõ ràng khi thao tác thành công hoặc khi xảy ra lỗi dữ liệu; hỗ trợ hiển thị tốt trên màn hình máy tính để bàn (nhân viên) và tương thích thiết bị di động (khách hàng xem Portal). | Bố cục trực quan, thông báo Toast/Alert rõ ràng; áp dụng Responsive Layout (Desktop cho nghiệp vụ phòng khám, Mobile-friendly cho Customer Portal). |
+| **NFR-06** | **Tính toàn vẹn & Bất biến của Bệnh án (Data Integrity)** | Đảm bảo tính pháp lý và lịch sử điều trị: Đơn giá và thuế suất dịch vụ được lưu cố định lúc chỉ định, đơn giá và thuế suất thuốc lưu cố định lúc bán, khoảng tham chiếu xét nghiệm lưu cố định lúc nhập kết quả; hồ sơ bệnh án sau khi bác sĩ chốt sẽ bị khóa chỉnh sửa chuyên môn; mọi thay đổi trạng thái đều có lịch sử. | Snapshot vào `service_invoices`, `medicine_invoice_items`, `lab_test_results`. Không dùng cột khóa riêng: tầng Service chặn mọi cập nhật chuyên môn khi `pet_visits.status` ∈ {`WAITING_PAYMENT`, `COMPLETED`, `CANCELLED`} (chỉ mở lại qua thao tác "Mở lại hồ sơ" có ghi lịch sử). Audit trail qua 3 bảng `*_histories` và `inventory_transactions`. |
+| **NFR-07** | **Kiến trúc module hóa & Dễ bảo trì (Maintainability)** | Mã nguồn được tổ chức theo kiến trúc phân tầng rõ ràng (Controller - Service - Repository) hoặc kiến trúc Microservices theo từng miền nghiệp vụ (Bounded Context); cấu trúc CSDL đạt chuẩn hóa 3NF, có quan hệ khóa ngoại chặt chẽ, dễ đọc hiểu và mở rộng tính năng mới. | Tách biệt rõ ràng tầng nghiệp vụ và tầng truy xuất dữ liệu; chuẩn hóa CSDL 3NF, loại bỏ dữ liệu dư thừa bất hợp lý. |
+| **NFR-08** | **Khả năng triển khai & Đóng gói (Portability & Deployment)** | Ứng dụng dễ dàng cấu hình, đóng gói và chạy thử nghiệm trên các máy tính khác nhau phục vụ hội đồng chấm và đánh giá đồ án mà không gặp xung đột môi trường phức tạp. | Hỗ trợ cấu hình chạy qua **Docker / Docker Compose** (đóng gói các service Backend, Frontend, MySQL 8 với 4 CSDL logic, RabbitMQ); chạy tốt trên các trình duyệt web hiện đại (Chrome, Edge, Firefox). |
+
+---
+
+## 4. MA TRẬN TRUY VẾT YÊU CẦU TỔNG HỢP (REQUIREMENTS TRACEABILITY MATRIX - RTM)
+
+Bảng ma trận truy vết dưới đây thiết lập mối liên kết hai chiều khép kín (Bidirectional Traceability) giữa các **Yêu cầu Chức năng (FR)** với **Ca sử dụng (Use Case)**, **Bảng CSDL (`schema_init.sql`)**, **Sơ đồ Trạng thái (State Machine)**, **Sơ đồ Hoạt động (Activity Diagram)** và **Ngoại lệ xử lý (Exception)**:
+
+| Nhóm Phân hệ | Mã FR | Use Case liên quan | Bảng CSDL lưu trữ chính | State Machine liên quan | Activity Diagram | Mã Ngoại lệ xử lý |
+| :--- | :---: | :---: | :--- | :---: | :---: | :---: |
+| **1. Quản trị & Danh mục** | FR-01 $\rightarrow$ FR-07 | UC-01 $\rightarrow$ UC-07 | `users`, `roles`, `services`, `medicines`, `lab_test_items`, `service_lab_test_items`, `lab_test_reference_ranges`, `species` | - | - | - |
+| **2. Khách hàng & Thú cưng** | FR-08 $\rightarrow$ FR-11 | UC-18 | `users`, `pets` | - | AD-02 | - |
+| **3. Lịch hẹn khám** | FR-12 $\rightarrow$ FR-18 | UC-14 $\rightarrow$ UC-17 | `appointments`, `appointment_status_histories` | `appointments` (SM-04) | AD-02 | EX-01, EX-02 |
+| **4. Tiếp đón & Hàng đợi** | FR-19 $\rightarrow$ FR-26 | UC-18 $\rightarrow$ UC-21 | `pet_visits`, `pet_visit_status_histories`, `appointments` | `pet_visits` (`WAITING`)<br>`doctor_serving_status` (SM-02) | AD-01, AD-02 | EX-03, EX-04, EX-05 |
+| **5. Khám lâm sàng GĐ 1** | FR-27 $\rightarrow$ FR-34 | UC-22, UC-23 | `pet_visits`, `visit_service_details`, `service_invoices`, `pet_visit_status_histories` | `pet_visits` (T02, T04, T05, T11)<br>`visit_service_details` (SM-03)<br>`service_invoices` (SM-05) | AD-01, AD-03 | EX-12 |
+| **6. Cận lâm sàng (Lab & CĐHA)**| FR-35 $\rightarrow$ FR-45 | UC-25, UC-26 | `visit_service_details`, `visit_service_detail_histories`, `service_invoices`, `lab_test_results`, `imaging_results`, `imaging_attachments` | `visit_service_details` (SM-03)<br>`pet_visits` (T06, T12) | AD-01, AD-04 | EX-06, EX-07, EX-08, EX-09, EX-11 |
+| **7. Hội chẩn & Kê đơn GĐ 2** | FR-46 $\rightarrow$ FR-54 | UC-30, UC-31, UC-33 | `pet_visits`, `pet_visit_status_histories`, `prescriptions`, `prescription_items` | `pet_visits` (T07, T08, T09, T13, T14)<br>`doctor_serving_status` (SM-02) | AD-01, AD-05 | EX-10, EX-11, EX-12, EX-13 |
+| **8. Thanh toán & Bán thuốc** | FR-55 $\rightarrow$ FR-66 | UC-34, UC-35, UC-36, UC-37 | `service_invoices`, `medicine_invoices`, `medicine_invoice_items`, `prescriptions`, `prescription_items`, `medicines`, `inventory_transactions` (VIEW `v_service_invoice_amounts`, `v_medicine_invoice_amounts`) | `service_invoices` (SM-05)<br>`medicine_invoices` (SM-06)<br>`pet_visits` (T10) | AD-01, AD-06 | EX-11, EX-14, EX-15, EX-16 |
+| **9. Bệnh án & Báo cáo** | FR-67 $\rightarrow$ FR-70 | UC-08, UC-22, UC-38, UC-39 | Toàn bộ 25 bảng CSDL (doanh thu qua 2 VIEW hóa đơn) | Toàn bộ 6 State Machines | AD-01 | - |
+
+---
+
+## 5. TỔNG KẾT BÀN GIAO TÀI LIỆU
+
+- **Tổng số Yêu cầu Chức năng (FR):** **70 Yêu cầu** (được định lượng chi tiết từ `FR-01` đến `FR-70`, bao phủ 100% chu trình khám chữa bệnh ngoại trú, quản trị danh mục và vận hành phòng khám).
+- **Tổng số Yêu cầu Phi chức năng (NFR):** **8 Yêu cầu** (tinh gọn, thực dụng, tập trung vào các tiêu chí cốt lõi: Hiệu năng cơ bản, Bảo mật BCrypt/JWT, Phân quyền RBAC 6 vai trò, Toàn vẹn giao dịch ACID, Usability, Toàn vẹn bệnh án, Kiến trúc module hóa và Đóng gói Docker phục vụ Đồ án Tốt nghiệp).
+- **Tính nhất quán chéo:** Khớp với lược đồ v3.0 gồm 25 bảng trong 4 CSDL logic (`schema_init.sql`), 10 kiểu Enum lưu CSDL + 1 enum tầng ứng dụng (`DANH_SACH_KIEU_ENUM_HE_THONG.md`), 6 Sơ đồ Trạng thái (`THIET_KE_SO_DO_TRANG_THAI_STATE_MACHINE.md`; SM-05 hóa đơn dịch vụ, SM-06 hóa đơn thuốc), 6 Sơ đồ Hoạt động (`THIET_KE_SO_DO_HOAT_DONG_ACTIVITY.md`) và 16 ngoại lệ nghiệp vụ (`TONG_HOP_NGOAI_LE_VA_XU_LY_HE_THONG.md`).
+- **Ghi chú đánh số:** Giữ nguyên mã FR-01 → FR-70 như bản 2.0 để các tài liệu khác không bị lệch tham chiếu; FR-53 được thay nội dung (đơn thuốc không chứa giá) thay vì xóa.
+
+---
+
+## PHỤ LỤC: THAY ĐỔI SO VỚI PHIÊN BẢN 2.0
+
+| Mã | Bản 2.0 | Bản 3.0 | Lý do |
+| :--- | :--- | :--- | :--- |
+| FR-01 | Gán 3 vai trò nội bộ | Gán 5 vai trò nội bộ (thêm `LAB_TECHNICIAN`, `IMAGING_TECHNICIAN`) | Thiếu 2 vai trò kỹ thuật viên |
+| FR-02 | Phòng cố định cho Bác sĩ | Cho cả Bác sĩ và Kỹ thuật viên; không lưu phòng trên đợt khám | Bỏ `assigned_room` |
+| FR-03, FR-04 | `base_price`; không có VAT | `price` / `sale_price`, `vat_rate`; cấu hình gói xét nghiệm | Khớp tên cột; thêm thuế suất |
+| FR-16, FR-17 | "Giờ hẹn"; không nói nơi lưu người duyệt | `appointment_date + start_time + 30'`; người duyệt, lý do ghi ở lịch sử | Khớp tên cột thực tế |
+| FR-21 | 2 tầng (lệch với UC-20 và Mô tả nghiệp vụ ghi 3 tầng) | Chốt **2 tầng**: cấp cứu → FIFO theo `checked_in_at`; UC-20 và Mô tả nghiệp vụ sửa theo | Giờ hẹn nằm ở CSDL khác (`appointment-service`), tầng "đúng giờ hẹn" cần truy vấn liên service; chỉ mục `idx_visits_queue` phục vụ đúng 2 tầng |
+| FR-22, FR-23, FR-24 | `BUSY` chỉ khi `IN_PROGRESS`; khóa khi có `RESULTS_READY` bất kỳ | `BUSY` gồm ca đã gán chưa vào phòng; khóa chỉ với ca vừa có kết quả | Chống phân công trùng; khớp EX-10 |
+| FR-26, FR-27, FR-34, FR-54 | `cancel_reason`, `started_at`, `closed_at` | Ghi `pet_visit_status_histories` | Các cột đã bỏ khỏi `pet_visits` |
+| FR-27, FR-30, FR-32 | Snapshot giá vào `visit_service_details` | Tự tạo dịch vụ khám; dịch vụ tại phòng; mỗi chỉ định sinh 1 `service_invoices` có snapshot giá & VAT | Hóa đơn riêng cho từng dịch vụ (góp ý GVHD) |
+| FR-36 → FR-41 | SMS; nhãn `LOW/NORMAL/HIGH` không nói cách lưu; `min_value` | Thông báo ứng dụng; `action` lịch sử (`POSTPONED`, `RECALL`, `SAMPLE_COLLECTED`); nhãn tính khi hiển thị; `min_value_snapshot` | Không có nhà cung cấp SMS; bỏ cột dẫn xuất |
+| FR-43, FR-45, FR-48 | "Hóa đơn chỉ tính dịch vụ đã làm"; bỏ về giữa chừng → `CANCELLED`; tạo hóa đơn nợ mới | Hủy dịch vụ ⇒ hủy hóa đơn; bỏ về → `COMPLETED` + công nợ từ hóa đơn sẵn có | Không mất doanh thu; hóa đơn sinh lúc chỉ định |
+| FR-47 | Giữ `RESULTS_READY` khi hoãn | Gọi → `IN_PROGRESS`, hoãn → `RESULTS_READY`, không bật lại khóa | Hết mâu thuẫn với công thức trạng thái Bác sĩ |
+| FR-52 | Chặn kê vượt tồn kho | Chỉ cảnh báo | Khách được mua thuốc ngoài |
+| FR-53 | Snapshot giá thuốc vào `prescription_items` | Đơn thuốc không giá, không trạng thái; giá chốt lúc bán (`medicine_invoice_items`) | Bỏ cột giá trùng và `PrescriptionStatus` |
+| FR-55 → FR-65 | 1 hóa đơn gộp (`invoices`), `total_amount`, `final_amount`, `completed_at`, `EXPORT_PRESCRIPTION`, `DISPENSED` | Bảng kê hóa đơn dịch vụ; giảm giá từng hóa đơn; đủ hóa đơn dịch vụ ⇒ `COMPLETED`; bán thuốc tùy chọn với `medicine_invoices`, `EXPORT_SALE`; chống bán trùng bằng `prescription_id UNIQUE` + `version` | Đồng bộ lược đồ v3.0 |
+| FR-66 | Tham chiếu UC-04 | Tham chiếu UC-37; nêu bất biến tồn kho | Đúng Use Case nhập kho |
+| FR-69 | Doanh thu dịch vụ / thuốc chung chung | Lấy từ 2 loại hóa đơn `PAID` qua 2 VIEW; thống kê công nợ | Không lưu tổng tiền |
+| NFR-04 | "Spring Boot 4.1.11"; giao dịch chung chung | Liệt kê 4 nhóm giao dịch cục bộ; khóa lạc quan | Bỏ số phiên bản cụ thể (do tài liệu Kiến trúc quy định) |
+| NFR-06 | Cột `is_locked` | Chặn ở tầng Service theo trạng thái ca; snapshot ở 3 bảng | CSDL không có cột `is_locked` |
+| NFR-08 | MySQL/PostgreSQL | MySQL 8 (4 CSDL logic) + RabbitMQ | Hệ thống chỉ dùng MySQL |
+| RTM, Tổng kết | 23 bảng, 13 enum, `invoices` | 25 bảng, 10 enum CSDL, `service_invoices` / `medicine_invoices` | Lược đồ v3.0 |
+| Rà soát 10/11 | FR-01 trích BR-01; FR-23 trích EX-04 | FR-01 trích BR-20; FR-23 trích BR-11, EX-05 | Tham chiếu đúng nội dung |
+| Rà soát 10/11 | FR-24 không có thao tác đổi / gỡ phân công | Cho đổi Bác sĩ hoặc gỡ phân công khi ca chưa bắt đầu khám | Xử lý khách tạm ra ngoài mà không khóa Bác sĩ |
+| Rà soát 10/11 | FR-34 hủy ca khi đã có dịch vụ tại phòng hoàn thành | Chỉ cho hủy khi chưa có dịch vụ tại phòng `COMPLETED` | Tránh hóa đơn `PENDING` treo ở ca `CANCELLED` |
+| Rà soát 10/11 | FR-44 đếm mọi dịch vụ | Chỉ đếm dịch vụ `LABORATORY` / `IMAGING` | Mô tả chính xác điều kiện Join |
+| Rà soát 10/11 | FR-54 mở lại hồ sơ không xét hóa đơn thuốc `PENDING` | Chặn sửa đơn khi có hóa đơn thuốc chưa hủy | Tránh hóa đơn thuốc vượt số lượng kê |
+| Rà soát 10/11 | FR-59 thu "từng hóa đơn PENDING"; FR-61, FR-64 không có cách sửa hóa đơn thuốc | Thu theo danh sách hóa đơn được chọn; sửa dòng hóa đơn thuốc khi `PENDING`; hủy là kết thúc | Khớp API; EX-15 thực hiện được với `prescription_id UNIQUE` |
+| Rà soát 10/11 | NFR-02 "token hết hạn khi đăng xuất" | Access Token hết hạn 30 phút; đăng xuất thu hồi Refresh Token | Mô tả đúng cơ chế JWT |
