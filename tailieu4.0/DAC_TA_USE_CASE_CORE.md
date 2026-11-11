@@ -390,10 +390,10 @@ Dưới đây là danh mục đầy đủ **39 Ca sử dụng (Use Cases)** củ
 | **UC-15** | Quản lý lịch hẹn cá nhân: Đổi giờ / Hủy hẹn online *(Manage Personal Appointments)* | Chủ thú cưng (PET_OWNER) | Phân hệ 3: Đặt lịch hẹn khám |
 | **UC-16** | Đặt lịch hẹn tại quầy / qua điện thoại *(Receptionist Appointment Booking)* | Lễ tân (RECEPTIONIST) | Phân hệ 3: Đặt lịch hẹn khám |
 | **UC-17** | Duyệt xác nhận / Từ chối lịch hẹn trực tuyến *(Confirm & Cancel Online Appointments)* | Lễ tân (RECEPTIONIST) | Phân hệ 3: Đặt lịch hẹn khám |
-| **UC-18** | Tiếp nhận hồ sơ Khách hàng & Thú cưng tại quầy *(Front-desk Pet & Owner Reception)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi Sảnh |
-| **UC-19** | Tiếp nhận thú cưng tại quầy: Check-in & Walk-in *(Check-in Appointment & Walk-in)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi Sảnh |
-| **UC-20** | Giám sát danh sách chờ phân công & hàng đợi từng Bác sĩ *(Queue Monitoring & Priority Handling)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi Sảnh |
-| **UC-21** | Điều phối & Phân công Bác sĩ: xếp ca vào hàng đợi riêng của Bác sĩ *(Assign Doctor to Visit)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi Sảnh |
+| **UC-18** | Tiếp nhận hồ sơ Khách hàng & Thú cưng tại quầy *(Front-desk Pet & Owner Reception)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi khám |
+| **UC-19** | Tiếp nhận thú cưng tại quầy: Check-in & Walk-in *(Check-in Appointment & Walk-in)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi khám |
+| **UC-20** | Giám sát danh sách chờ phân công & hàng đợi từng Bác sĩ *(Queue Monitoring & Priority Handling)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi khám |
+| **UC-21** | Điều phối & Phân công Bác sĩ: xếp ca vào hàng đợi riêng của Bác sĩ *(Assign Doctor to Visit)* | Lễ tân (RECEPTIONIST) | Phân hệ 4: Tiếp đón & Hàng đợi khám |
 | **UC-22** | Bác sĩ tiếp nhận bệnh nhân & Khám lâm sàng sơ bộ *(Clinical Examination - Phase 1)* | Bác sĩ (VETERINARIAN) | Phân hệ 5: Khám Lâm sàng Sơ bộ (GĐ 1) |
 | **UC-23** | Chỉ định Dịch vụ Kỹ thuật cận lâm sàng *(Order Paraclinical Services)* | Bác sĩ (VETERINARIAN) | Phân hệ 5: Khám Lâm sàng Sơ bộ (GĐ 1) |
 | **UC-24** | Xử lý rẽ nhánh Chốt ca khám thông thường / Tiêm phòng *(Fast-track Non-paraclinical Visit)* | Bác sĩ (VETERINARIAN) | Phân hệ 5: Khám Lâm sàng Sơ bộ (GĐ 1) |

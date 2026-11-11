@@ -14,7 +14,7 @@
    - [Phân hệ 1: Quản trị Hệ thống, Tài khoản & Cấu hình Danh mục](#phân-hệ-1-quản-trị-hệ-thống-tài-khoản--cấu-hình-danh-mục)
    - [Phân hệ 2: Quản lý Hồ sơ Khách hàng & Thú cưng](#phân-hệ-2-quản-lý-hồ-sơ-khách-hàng--thú-cưng)
    - [Phân hệ 3: Đặt lịch hẹn Khám & Quản lý Lịch hẹn](#phân-hệ-3-đặt-lịch-hẹn-khám--quản-lý-lịch-hẹn)
-   - [Phân hệ 4: Tiếp đón Sảnh, Hàng đợi & Phân công Bác sĩ](#phân-hệ-4-tiếp-đón-sảnh-hàng-đợi--phân-công-bác-sĩ)
+   - [Phân hệ 4: Tiếp đón, Hàng đợi riêng từng Bác sĩ & Phân công](#phân-hệ-4-tiếp-đón-hàng-đợi-riêng-từng-bác-sĩ--phân-công)
    - [Phân hệ 5: Khám Lâm sàng Sơ bộ & Chỉ định Dịch vụ Kỹ thuật (GĐ 1)](#phân-hệ-5-khám-lâm-sàng-sơ-bộ--chỉ-định-dịch-vụ-kỹ-thuật-gđ-1)
    - [Phân hệ 6: Quản lý & Thực hiện Cận lâm sàng (Lab & CĐHA)](#phân-hệ-6-quản-lý--thực-hiện-cận-lâm-sàng-lab--cđha)
    - [Phân hệ 7: Hội chẩn Kết quả, Chẩn đoán Xác định & Kê đơn (GĐ 2)](#phân-hệ-7-hội-chẩn-kết-quả-chẩn-đoán-xác-định--kê-đơn-gđ-2)
@@ -99,7 +99,7 @@ Hệ thống tin học hóa toàn diện quy trình vận hành phòng khám th�
 
 ---
 
-### Phân hệ 4: Tiếp đón Sảnh, Hàng đợi riêng từng Bác sĩ & Phân công
+### Phân hệ 4: Tiếp đón, Hàng đợi riêng từng Bác sĩ & Phân công
 
 | Mã FR | Tên Yêu cầu Chức năng | Mô tả chi tiết hành vi hệ thống | Tác nhân | Ưu tiên | Use Case / Quy tắc |
 | :---: | :--- | :--- | :---: | :---: | :---: |
@@ -228,7 +228,7 @@ Bảng ma trận truy vết dưới đây thiết lập mối liên kết hai ch
 | **4. Tiếp đón & Hàng đợi** | FR-19 $\rightarrow$ FR-26 | UC-18 $\rightarrow$ UC-21 | `pet_visits`, `pet_visit_status_histories`, `appointments` | `pet_visits` (`WAITING`)<br>`doctor_serving_status` (SM-02) | AD-01, AD-02 | EX-03, EX-04, EX-05 (đổi nghĩa ở rà soát 11/11) |
 | **5. Khám lâm sàng GĐ 1** | FR-27 $\rightarrow$ FR-34 | UC-22, UC-23 | `pet_visits`, `visit_service_details`, `service_invoices`, `pet_visit_status_histories` | `pet_visits` (T02, T04, T05, T11)<br>`visit_service_details` (SM-03)<br>`service_invoices` (SM-05) | AD-01, AD-03 | EX-12 |
 | **6. Cận lâm sàng (Lab & CĐHA)**| FR-35 $\rightarrow$ FR-45 | UC-25, UC-26 | `visit_service_details`, `visit_service_detail_histories`, `service_invoices`, `lab_test_results`, `imaging_results`, `imaging_attachments` | `visit_service_details` (SM-03)<br>`pet_visits` (T06, T12) | AD-01, AD-04 | EX-06, EX-07, EX-08, EX-09, EX-11 |
-| **7. Hội chẩn & Kê đơn GĐ 2** | FR-46 $\rightarrow$ FR-54 | UC-30, UC-31, UC-33 | `pet_visits`, `pet_visit_status_histories`, `prescriptions`, `prescription_items` | `pet_visits` (T07, T08, T09, T13, T14)<br>`doctor_serving_status` (SM-02) | AD-01, AD-05 | EX-10, EX-11, EX-12, EX-13 |
+| **7. Hội chẩn & Kê đơn GĐ 2** | FR-46 $\rightarrow$ FR-54 | UC-30, UC-31, UC-33 | `pet_visits`, `pet_visit_status_histories`, `prescriptions`, `prescription_items` | `pet_visits` (T07, T08, T09, T14)<br>`doctor_serving_status` (SM-02) | AD-01, AD-05 | EX-10, EX-11, EX-12, EX-13 |
 | **8. Thanh toán & Bán thuốc** | FR-55 $\rightarrow$ FR-66 | UC-34, UC-35, UC-36, UC-37 | `service_invoices`, `medicine_invoices`, `medicine_invoice_items`, `prescriptions`, `prescription_items`, `medicines`, `inventory_transactions` (VIEW `v_service_invoice_amounts`, `v_medicine_invoice_amounts`) | `service_invoices` (SM-05)<br>`medicine_invoices` (SM-06)<br>`pet_visits` (T10) | AD-01, AD-06 | EX-11, EX-14, EX-15, EX-16 |
 | **9. Bệnh án & Báo cáo** | FR-67 $\rightarrow$ FR-70 | UC-08, UC-22, UC-38, UC-39 | Toàn bộ 25 bảng CSDL (doanh thu qua 2 VIEW hóa đơn) | Toàn bộ 6 State Machines | AD-01 | - |
 

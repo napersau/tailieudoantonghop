@@ -312,7 +312,7 @@
 
 ---
 
-### Task 3.2: Tiếp đón tại Quầy (Check-in), Khách Vãng lai & Hàng đợi Sảnh
+### Task 3.2: Tiếp đón tại Quầy (Check-in), Khách Vãng lai & Danh sách chờ phân công
 - **Người thực hiện:** Nguyễn Đức Khởi (Phụ trách FR-18, FR-19, FR-20, FR-21, FR-26, UC-18, UC-19, UC-20, EX-02, EX-03, EX-04)
 - **Mục tiêu:** Lễ tân tiếp nhận thú cưng (có hẹn hoặc vãng lai), tạo `pet_visits` (`WAITING`). **Lễ tân không cân, không đo thân nhiệt** – Bác sĩ làm trong phòng khám (Task 3.3).
 - [ ] **3.2.1** API Check-in thống nhất (`POST /api/v1/clinical/pet-visits/check-in`), body `{petId, appointmentId (null nếu vãng lai), isEmergency, initialSymptoms}`:
