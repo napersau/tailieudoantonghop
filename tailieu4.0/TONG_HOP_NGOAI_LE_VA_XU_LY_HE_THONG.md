@@ -3,15 +3,13 @@
 
 > **Tài liệu phục vụ Báo cáo & Giải trình Đồ án tốt nghiệp Công nghệ Thông tin**  
 > **Phiên bản:** 3.0 (đồng bộ với lược đồ CSDL v3.0, State Machine v3.0, Activity v3.0 và Đặc tả Use Case v3.0)  
-> **Cập nhật 11/11/2026 – Hàng đợi riêng theo phòng:** viết lại EX-03, EX-04, EX-05, EX-06, EX-07, EX-09, EX-10 theo cơ chế mỗi phòng một hàng đợi, phân công không phụ thuộc trạng thái Bác sĩ và **lùi 1 bậc** khi khách vắng mặt (BR-11, BR-34 trong `DAC_TA_USE_CASE_CORE.md`).  
 > **Mục tiêu:** Liệt kê toàn diện các tình huống biên (Edge Cases), lỗi phát sinh và ngoại lệ nghiệp vụ (Business Exceptions) trong thực tế vận hành phòng khám thú y, cùng cơ chế điều phối và biến động trạng thái dữ liệu (Database State Transitions) chi tiết.
 
 ### Quy ước chung
 - **Mọi lần đổi trạng thái** của lịch hẹn, đợt khám, chỉ định dịch vụ đều ghi 1 dòng lịch sử trong cùng giao dịch (`appointment_status_histories`, `pet_visit_status_histories`, `visit_service_detail_histories`). Lý do hủy và ghi chú nằm ở cột `notes` / `reason` của dòng lịch sử; thời điểm nằm ở `created_at` của dòng lịch sử. Bảng `pet_visits` **không còn** các cột `cancel_reason`, `started_at`, `closed_at`, `completed_at`.
 - **Hóa đơn:** mỗi dịch vụ được chỉ định có 1 hóa đơn dịch vụ (`service_invoices`) tạo cùng lúc với chỉ định; thuốc có hóa đơn thuốc (`medicine_invoices`) chỉ khi khách mua tại phòng khám. Không lưu tổng tiền; số tiền tính qua VIEW `v_service_invoice_amounts`, `v_medicine_invoice_amounts`.
 - **Thông báo cho chủ nuôi** được gửi qua ứng dụng / Cổng thông tin (`notification-service`). Hệ thống không tích hợp nhà cung cấp SMS.
-- Mã chuyển trạng thái `T01`–`T14` tham chiếu bảng SM-01 trong `THIET_KE_SO_DO_TRANG_THAI_STATE_MACHINE.md` (T13 đã bỏ từ 11/11).
-- **Hàng đợi (cập nhật 11/11):** mỗi Bác sĩ (phòng khám cố định), phòng Xét nghiệm và phòng CĐHA có **một hàng đợi riêng**, không có hàng đợi chung. Thứ tự trong hàng đợi lưu ở `queue_position` (`pet_visits` cho hàng đợi phòng khám, `visit_service_details` cho hàng đợi phòng CLS). **Lùi 1 bậc** = hoán đổi `queue_position` với ca liền sau trong cùng hàng đợi, không đổi trạng thái; ghi 1 dòng lịch sử `action = 'SKIPPED'`. Số lần lùi được đếm từ lịch sử, không lưu cột riêng. Chi tiết ở mục 2.4 của tài liệu State Machine. *(Các cột `queue_position` và `pet_visit_status_histories.action` cần bổ sung vào `schema_init.sql` và ERD.)*
+- Mã chuyển trạng thái `T01`–`T14` tham chiếu bảng SM-01 trong `THIET_KE_SO_DO_TRANG_THAI_STATE_MACHINE.md`.
 
 ---
 
@@ -20,7 +18,7 @@
 1. [Bảng Ma trận Tổng hợp các Ngoại lệ Hệ thống](#1-bảng-ma-trận-tổng-hợp-các-ngoại-lệ-hệ-thống)
 2. [Phân hệ 1: Đặt lịch hẹn & Hàng đợi Tiếp đón (Booking & Reception)](#2-phân-hệ-1-đặt-lịch-hẹn--hàng-đợi-tiếp-đón)
 3. [Phân hệ 2: Khám lâm sàng & Điều phối Bác sĩ (Clinical Phase 1 & Dispatching)](#3-phân-hệ-2-khám-lâm-sàng--điều-phối-bác-sĩ)
-4. [Phân hệ 3: Cận lâm sàng, Gọi số & Vắng mặt – Lùi 1 bậc (áp dụng mọi hàng đợi)](#4-phân-hệ-3-cận-lâm-sàng-gọi-số--vắng-mặt--lùi-1-bậc)
+4. [Phân hệ 3: Cận lâm sàng & 2 Hàng đợi Chuyên môn độc lập (Lab & Imaging)](#4-phân-hệ-3-cận-lâm-sàng--2-hàng-đợi-chuyên-môn-độc-lập)
 5. [Phân hệ 4: Hội chẩn Giai đoạn 2, Hàng đợi Tái khám & Kê đơn (Clinical Phase 2)](#5-phân-hệ-4-hội-chẩn-giai-đoạn-2-hàng-đợi-tái-khám--kê-đơn)
 6. [Phân hệ 5: Thanh toán Hóa đơn & Bán thuốc theo Đơn (Billing & Pharmacy)](#6-phân-hệ-5-thanh-toán-hóa-đơn--bán-thuốc-theo-đơn)
 7. [Phụ lục: Thay đổi so với phiên bản 2.0](#phụ-lục-thay-đổi-so-với-phiên-bản-20)
@@ -32,15 +30,15 @@
 | Mã NL | Tên tình huống ngoại lệ | Phân hệ phát sinh | Bảng & Cột CSDL biến động | Trạng thái Trước $\rightarrow$ Sau | Giải pháp xử lý nghiệp vụ |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **EX-01** | Khách đặt hẹn không đến đúng giờ | Đặt lịch hẹn | `appointments.status`<br>`appointment_status_histories` | `CONFIRMED` $\rightarrow$ `NO_SHOW` | Quá `start_time` + 30 phút, tác vụ định kỳ tự đánh dấu vắng mặt, giải phóng chỗ cho khách tại sảnh. |
-| **EX-02** | Khách vãng lai (Walk-in) không đặt lịch | Tiếp đón | `pet_visits.appointment_id`<br>`pet_visits.status` | `NULL`<br>`[Tạo mới]` $\rightarrow$ `WAITING` | Lễ tân tiếp nhận linh hoạt, tạo tài khoản/hồ sơ tức thì, rồi phân công Bác sĩ để đưa ca vào hàng đợi phòng khám của Bác sĩ đó. |
-| **EX-03** | Khách bỏ về khi đang chờ trong hàng đợi phòng khám | Tiếp đón | `pet_visits.status`<br>`pet_visit_status_histories.notes` | `WAITING` $\rightarrow$ `CANCELLED` | Lễ tân hủy ca, ca rời hàng đợi của phòng Bác sĩ (hoặc danh sách "Chờ phân công"), các ca phía sau tự tiến lên; lý do ghi vào `notes` của dòng lịch sử. |
-| **EX-04** | Ca cấp cứu khẩn cấp chen ngang hàng đợi | Tiếp đón / Khám / CLS | `pet_visits.is_emergency`<br>`pet_visits.queue_position`<br>`visit_service_details.queue_position` | `FALSE` $\rightarrow$ `TRUE` | Ca được chèn lên đầu hàng đợi của phòng mà nó vào (sau các ca cấp cứu đang chờ), viền đỏ cảnh báo. |
-| **EX-05** | Ca có kết quả CLS quay lại phòng Bác sĩ đang có nhiều ca chờ | Điều phối | `pet_visits.status`<br>`pet_visits.queue_position` | `WAITING_RESULTS` $\rightarrow$ `RESULTS_READY` (T06) | Hệ thống tự chèn ca vào hàng đợi phòng Bác sĩ ngay sau các ca cấp cứu và các ca có kết quả trước đó. **Không khóa phân công**: Lễ tân vẫn phân ca mới, ca mới đứng sau. |
-| **EX-06** | Khách vắng mặt khi được gọi vào phòng (phòng khám, Xét nghiệm, CĐHA) | Khám / Cận lâm sàng | `pet_visits.queue_position` hoặc `visit_service_details.queue_position`<br>`*_histories.action = 'SKIPPED'` | Giữ nguyên trạng thái (`WAITING` / `RESULTS_READY` / `PENDING`) | Gọi tối đa 3 lần không vào $\rightarrow$ người phụ trách phòng bấm **"Không có mặt – Lùi 1 bậc"**: ca đổi chỗ với ca liền sau, hệ thống gọi ca kế tiếp, thông báo qua ứng dụng. |
-| **EX-07** | Khách vắng mặt đến lần lùi thứ 3 / quay lại sau khi bị đưa xuống cuối hàng | Khám / Cận lâm sàng | `queue_position`<br>`*_histories.action = 'MOVED_TO_END'` | Giữ nguyên trạng thái | Lần lùi thứ 3 trong một lượt chờ $\rightarrow$ đưa ca xuống cuối hàng đợi phòng, báo Lễ tân liên hệ khách. Khách quay lại thì chờ đến lượt bình thường; không quay lại thì hủy (EX-03) hoặc đóng ca (EX-11). |
+| **EX-02** | Khách vãng lai (Walk-in) không đặt lịch | Tiếp đón | `pet_visits.appointment_id`<br>`pet_visits.status`, `queue_order` | `NULL`<br>`[Tạo mới]` $\rightarrow$ `WAITING` | Lễ tân tiếp nhận linh hoạt, tạo tài khoản/hồ sơ tức thì, xếp vào hàng đợi Bác sĩ (hoặc danh sách chờ phân công). |
+| **EX-03** | Khách bỏ về khi đang chờ | Tiếp đón | `pet_visits.status`<br>`pet_visit_status_histories.notes` | `WAITING` $\rightarrow$ `CANCELLED` | Lễ tân hủy ca, ca rời khỏi hàng đợi Bác sĩ (hoặc danh sách chờ phân công), lý do ghi vào `notes` của dòng lịch sử. |
+| **EX-04** | Ca cấp cứu khẩn cấp chen ngang hàng đợi | Tiếp đón / Khám | `pet_visits.is_emergency` | `FALSE` $\rightarrow$ `TRUE` | Lên đầu danh sách chờ phân công, đầu hàng đợi của Bác sĩ được xếp và đầu hàng đợi phòng CLS, viền đỏ cảnh báo. |
+| **EX-05** | Lễ tân xếp ca mới vào hàng đợi Bác sĩ đang có ca vừa có kết quả | Điều phối | `pet_visits.doctor_id`, `queue_order` | Ca mới: `WAITING` (vào hàng đợi)<br>Ca có kết quả: đứng đầu hàng đợi | Không chặn Lễ tân. Ca có kết quả đã được đặt lên đầu hàng đợi (sau ca cấp cứu) nên vẫn được gọi trước ca mới. |
+| **EX-06** | Khách vắng mặt khi gọi vào phòng Xét nghiệm / CĐHA | Cận lâm sàng | `visit_service_details.queue_order`, `skip_count`<br>`visit_service_detail_histories.action` | Giữ nguyên `PENDING`<br>`action = SKIPPED` | Gọi 2–3 lần không vào $\rightarrow$ "Đẩy lùi 1 bậc": xếp ra sau người kế tiếp, gọi ngay người đó, thông báo qua ứng dụng. Không giới hạn số lần. |
+| **EX-07** | Khách quay lại sau khi bị đẩy lùi ở phòng máy | Cận lâm sàng | `visit_service_details.status` | `PENDING` $\rightarrow$ `IN_PROGRESS` (khi được gọi và vào phòng) | Không cần thao tác: dịch vụ vẫn ở trong hàng đợi, khách chờ tới lượt; màn hình hiển thị số lần bị lùi. |
 | **EX-08** | Khách xin hủy 1 trong các dịch vụ cận lâm sàng | Cận lâm sàng | `visit_service_details.status`<br>`service_invoices.payment_status`<br>`pet_visits.status` | `PENDING` $\rightarrow$ `CANCELLED`<br>`PENDING` $\rightarrow$ `CANCELLED`<br>`WAITING_RESULTS` $\rightarrow$ `RESULTS_READY` | Hủy dịch vụ **và hóa đơn của dịch vụ đó** trong cùng giao dịch; nếu các dịch vụ còn lại đã xong thì ca chuyển sang có kết quả. |
-| **EX-09** | CĐHA gọi số đúng lúc thú cưng đang lấy máu | Điều phối liên phòng | `visit_service_detail_histories.action` (dòng Lab: `START_PROCESSING` / `SAMPLE_COLLECTED`) | Dịch vụ CĐHA giữ `PENDING`, giữ nguyên `queue_position` | Hiện huy hiệu `[Đang lấy máu bên phòng Lab]`; khi bấm "Gọi số kế tiếp", hệ thống **tự bỏ qua** ca này (không tính là vắng mặt) và gọi ca liền sau. |
-| **EX-10** | Bác sĩ gọi ca có kết quả (GĐ 2) nhưng khách chưa vào phòng | Tái khám GĐ 2 | `pet_visits.queue_position`<br>`pet_visit_status_histories.action = 'SKIPPED'` | Giữ nguyên `RESULTS_READY` | Bác sĩ bấm **"Không có mặt – Lùi 1 bậc"** như EX-06. Gọi số không đổi trạng thái ca nên không còn chuyển `IN_PROGRESS` → `RESULTS_READY` (T13 đã bỏ), không ảnh hưởng việc phân công. |
+| **EX-09** | CĐHA gọi số đúng lúc thú cưng đang lấy máu | Điều phối liên phòng | `visit_service_detail_histories.action` (dòng Lab: `START_PROCESSING` / `SAMPLE_COLLECTED`; dòng CĐHA: `SKIPPED`) | Dịch vụ CĐHA giữ `PENDING` | Hiện huy hiệu `[Đang lấy máu bên phòng Lab]` khi Lab chưa bấm "Đã lấy mẫu"; Bác sĩ CĐHA "Đẩy lùi 1 bậc", gọi người kế tiếp. |
+| **EX-10** | Bác sĩ gọi số nhưng khách chưa vào phòng (GĐ 1 hoặc GĐ 2) | Khám / Tái khám GĐ 2 | `pet_visits.queue_order`, `skip_count` | Giữ nguyên `WAITING` / `RESULTS_READY` | Gọi 2–3 lần không vào $\rightarrow$ "Đẩy lùi 1 bậc": xếp ra sau người kế tiếp trong hàng đợi Bác sĩ, gọi ngay người đó. Không có bước chuyển trạng thái (bỏ T13). |
 | **EX-11** | Khách bỏ về hẳn không quay lại đọc kết quả | CLS / Hội chẩn GĐ 2 | `pet_visits.status`<br>`visit_service_details.status`<br>`service_invoices.payment_status` | `RESULTS_READY` / `WAITING_RESULTS` $\rightarrow$ `COMPLETED` (T08 / T12)<br>Dịch vụ chưa làm $\rightarrow$ `CANCELLED`<br>Hóa đơn dịch vụ đã làm giữ `PENDING` (công nợ) | "Đóng ca / Khách bỏ về": lưu vĩnh viễn kết quả, **không tạo hóa đơn mới**; hóa đơn dịch vụ còn `PENDING` giữ làm công nợ. |
 | **EX-12** | Bấm chốt đợt khám khi chưa nhập đủ thông tin | Kê đơn / Chốt ca | *Validation chặn lại* | Không đổi trạng thái | Yêu cầu nhập `diagnosis` (và cân nặng, thân nhiệt; hoàn tất / hủy dịch vụ tại phòng) trước khi chuyển sang thanh toán. |
 | **EX-13** | Số lượng thuốc kê vượt quá tồn kho hiện tại | Kê đơn | *Cảnh báo, không chặn* | Đơn thuốc vẫn được lưu | Cảnh báo kho không đủ; Bác sĩ giữ nguyên (khách mua ngoài) hoặc đổi thuốc. |
@@ -70,76 +68,68 @@
     - Nếu là khách mới: Tạo nhanh tài khoản `users` (vai trò `PET_OWNER`) và tạo hồ sơ `pets`.
     - Nếu là khách quen: Chọn thú cưng có sẵn trong danh sách.
   - Hệ thống kiểm tra thú cưng không có đợt khám nào khác đang mở, rồi tạo đợt khám mới mà không cần chọn lịch hẹn.
-  - Lễ tân phân công Bác sĩ ngay sau đó (UC-21) để đưa ca vào hàng đợi phòng khám của Bác sĩ được chọn; trước khi phân công, ca nằm trong danh sách "Chờ phân công".
 - **Biến động CSDL:**
-  - Bảng `pet_visits`: `appointment_id = NULL`, `status = 'WAITING'`, `checked_in_at = CURRENT_TIMESTAMP`, `receptionist_id` = Lễ tân tiếp đón.
+  - Bảng `pet_visits`: `appointment_id = NULL`, `status = 'WAITING'`, `checked_in_at = CURRENT_TIMESTAMP`, `queue_order` = thời điểm tiếp nhận (epoch micro giây), `receptionist_id` = Lễ tân tiếp đón, `doctor_id` = Bác sĩ được chọn (hoặc `NULL` nếu chưa xếp).
   - Bảng `pet_visit_status_histories`: Ghi 01 dòng (`from_status = NULL`, `to_status = 'WAITING'`).
 
-### EX-03: Khách hàng tự ý bỏ về khi đang chờ trong hàng đợi phòng khám
-- **Bối cảnh thực tế:** Khách đã được tiếp nhận và đang chờ trong hàng đợi phòng của Bác sĩ (hoặc chưa kịp phân công), nhưng chờ lâu hoặc có việc bận đột xuất nên xin về trước khi vào phòng khám. Trường hợp ca bị lùi đến lần thứ 3 (EX-07) mà Lễ tân liên hệ, khách xác nhận không quay lại cũng xử lý như vậy.
-- **Cơ chế xử lý nghiệp vụ:** Lễ tân bấm nút *"Hủy tiếp nhận"* trên ca trong hàng đợi phòng (hoặc trong danh sách "Chờ phân công"), chọn hoặc nhập lý do hủy (bắt buộc).
+### EX-03: Khách hàng tự ý bỏ về khi đang ngồi chờ ở sảnh
+- **Bối cảnh thực tế:** Khách đã được tiếp nhận nhưng chờ lâu hoặc có việc bận đột xuất nên xin về trước khi vào phòng khám (kể cả khi đã nằm trong hàng đợi của một Bác sĩ).
+- **Cơ chế xử lý nghiệp vụ:** Lễ tân bấm nút *"Hủy tiếp nhận"* trên bảng điều phối, chọn hoặc nhập lý do hủy (bắt buộc).
 - **Biến động CSDL:**
   - Bảng `pet_visits`: Cột `status` chuyển từ `'WAITING'` sang `'CANCELLED'`.
   - Bảng `pet_visit_status_histories`: Ghi 01 dòng (`from_status = 'WAITING'`, `to_status = 'CANCELLED'`, `changed_by_user_id` = Lễ tân, `notes = 'Khách bận việc gia đình xin về'`).
-  - Ca rời hàng đợi của phòng Bác sĩ vì hàng đợi chỉ gồm các ca `WAITING` / `RESULTS_READY`; các ca phía sau tự tiến lên một vị trí, không phải cập nhật `queue_position` của ca khác.
-  - Trạng thái Bác sĩ không bị ảnh hưởng (phân công không làm Bác sĩ "bận", xem SM-02).
+  - Ca khám biến mất khỏi hàng đợi của Bác sĩ (hoặc danh sách chờ phân công); những người phía sau tự lên một bậc vì hàng đợi sắp theo `queue_order`.
   - Chưa có chỉ định dịch vụ nên không phát sinh hóa đơn.
 
 ### EX-04: Ca bệnh cấp cứu khẩn cấp chen ngang hàng đợi (Emergency Preemption)
 - **Bối cảnh thực tế:** Thú cưng bị sốc phản vệ, tai nạn giao thông, co giật hoặc khó thở tím tái cần được cấp cứu ngay lập tức.
 - **Cơ chế xử lý nghiệp vụ:**
-  - Lễ tân tích chọn ô **"Ca cấp cứu khẩn cấp"** lúc tiếp nhận (hoặc Bác sĩ bật cờ khẩn cấp cho ca đang chờ trong hàng đợi phòng mình).
-  - Ca xuất hiện đầu danh sách "Chờ phân công" kèm cảnh báo đỏ; Lễ tân phân công ngay cho Bác sĩ đang rảnh hoặc có ít ca chờ nhất.
-  - Khi vào bất kỳ hàng đợi nào (phòng khám, phòng Xét nghiệm, phòng CĐHA), ca được **chèn lên đầu hàng đợi của phòng đó, đứng sau các ca cấp cứu đang chờ** (cấp cứu trước – trước), kèm viền đỏ nhấp nháy cảnh báo. Ca cấp cứu không chen vào hàng đợi của phòng khác.
+  - Lễ tân tích chọn ô **"Ca cấp cứu khẩn cấp"** lúc tiếp nhận (hoặc Bác sĩ bật cờ khẩn cấp).
+  - Thuật toán sắp xếp tự động đưa ca này lên **đầu** danh sách chờ phân công, đầu hàng đợi của Bác sĩ được xếp và đầu hàng đợi các phòng cận lâm sàng, kèm viền đỏ nhấp nháy cảnh báo. Lễ tân xếp ngay ca vào hàng đợi một Bác sĩ; Bác sĩ khám xong ca hiện tại sẽ gọi ca cấp cứu trước.
+  - Nếu gọi ca cấp cứu mà không thấy và Bác sĩ "Đẩy lùi 1 bậc", ca mất vị trí ưu tiên cấp cứu và được xếp như ca thường ngay sau người kế tiếp (`skip_count > 0`).
 - **Biến động CSDL:**
   - Bảng `pet_visits`: Cột `is_emergency = TRUE`.
-  - Hàng đợi phòng khám: `pet_visits.queue_position` = giá trị nằm giữa ca cấp cứu cuối cùng đang chờ và ca không cấp cứu đầu tiên của hàng đợi phòng đó (nếu chưa có ca cấp cứu nào thì nhỏ hơn ca đầu hàng).
-  - Hàng đợi phòng CLS: các dòng `visit_service_details` của ca được đặt `queue_position` theo cùng quy tắc trong hàng đợi phòng Xét nghiệm / CĐHA.
-  - Hiển thị hàng đợi chỉ cần `ORDER BY queue_position` trên chỉ mục `(doctor_id, status, queue_position)`; không còn dùng `ORDER BY is_emergency DESC, checked_in_at ASC` trên hàng đợi chung.
+  - Nhờ chỉ mục hỗn hợp `idx_visits_queue (doctor_id, status, is_emergency, queue_order)`, câu lệnh `ORDER BY (is_emergency AND skip_count = 0) DESC, queue_order ASC` định vị ca này lên đầu hàng đợi của Bác sĩ với chi phí truy vấn $O(\log N)$.
 
 ---
 
 ## 3. PHÂN HỆ 2: KHÁM LÂM SÀNG & ĐIỀU PHỐI BÁC SĨ
 
-### EX-05: Ca có kết quả cận lâm sàng quay lại phòng Bác sĩ đang có nhiều ca chờ
-- **Bối cảnh thực tế:** Bác sĩ A đang khám ca khác và hàng đợi phòng A còn 3 ca mới đang chờ. Một ca của Bác sĩ A đi xét nghiệm 20 phút trước vừa có đủ kết quả (`RESULTS_READY`). Khách của ca này đã chờ lâu, cần được đọc kết quả trước các ca mới.
-- **Cơ chế xử lý nghiệp vụ (ưu tiên trong hàng đợi phòng, thay cho Khóa ưu tiên):**
-  - Khi ca chuyển `RESULTS_READY` (T06), hệ thống **tự chèn ca vào hàng đợi phòng của Bác sĩ A** ngay sau các ca cấp cứu và các ca có kết quả trước đó, trước mọi ca mới chưa khám. Màn hình Bác sĩ hiện thông báo "Có kết quả: [Tên Pet]".
-  - Khi xong ca đang khám, Bác sĩ A bấm "Gọi số kế tiếp" và ca có kết quả được gọi trước.
-  - **Lễ tân không bị chặn:** vẫn phân ca mới vào phòng A bình thường; ca mới đứng cuối hàng nên không thể chiếm lượt của ca có kết quả. Nhờ vậy không còn trạng thái `AVAILABLE_PRIORITY_CALLBACK` và không còn nút phân công bị vô hiệu hóa.
+### EX-05: Lễ tân xếp ca mới vào hàng đợi Bác sĩ đang có ca vừa có kết quả
+- **Bối cảnh thực tế:** Trong hàng đợi của Bác sĩ A có 1 ca đi xét nghiệm 20 phút trước và vừa có kết quả (`RESULTS_READY`). Cùng lúc Lễ tân tiếp nhận một khách mới và muốn xếp vào hàng đợi Bác sĩ A.
+- **Cơ chế xử lý nghiệp vụ (từ rà soát 11/11, thay cho Khóa ưu tiên):**
+  - Lễ tân **không bị chặn**: mỗi Bác sĩ có hàng đợi riêng, Lễ tân xếp ca mới vào hàng đợi Bác sĩ A như bình thường (hệ thống vẫn gợi ý Bác sĩ ít người chờ nhất).
+  - Khi ca chuyển `RESULTS_READY` (T06), hệ thống đã đặt `queue_order` của ca đó = giá trị nhỏ nhất trong hàng đợi Bác sĩ A − 1, nên ca có kết quả **đứng đầu hàng đợi** (chỉ sau ca cấp cứu). Ca mới xếp vào sau.
+  - Khi Bác sĩ A bấm "Gọi số tiếp theo", hệ thống gọi ca có kết quả trước. Khách cũ đã đợi xét nghiệm không bị khách mới chen lượt.
 - **Biến động CSDL:**
-  - Bảng `pet_visits`: `status` chuyển `'WAITING_RESULTS'` → `'RESULTS_READY'`; `queue_position` được đặt lại theo vị trí ưu tiên nói trên (cùng giao dịch T06).
-  - Bảng `pet_visit_status_histories`: Ghi 01 dòng (`changed_by_user_id = NULL` – hệ thống tự chuyển).
+  - Ca mới: `pet_visits.doctor_id` = Bác sĩ A, giữ `queue_order` theo thời điểm tiếp nhận.
+  - Ca có kết quả: `queue_order` đã được đặt lại ở T06; không có bảng nào khác thay đổi.
 
 ---
 
-## 4. PHÂN HỆ 3: CẬN LÂM SÀNG, GỌI SỐ & VẮNG MẶT – LÙI 1 BẬC
+## 4. PHÂN HỆ 3: CẬN LÂM SÀNG & 2 HÀNG ĐỢI CHUYÊN MÔN ĐỘC LẬP
 
-### EX-06: Khách hàng vắng mặt khi được gọi vào phòng (phòng khám, Xét nghiệm, CĐHA) – Lùi 1 bậc
-- **Bối cảnh thực tế:** Đến lượt khám / xét nghiệm / siêu âm, hệ thống hiển thị thông báo gọi số nhưng chủ nuôi đưa thú cưng ra ngoài đi dạo hoặc đi vệ sinh.
-- **Cơ chế xử lý nghiệp vụ (áp dụng chung cho mọi hàng đợi):**
-  - Người phụ trách phòng (Bác sĩ, KTV Xét nghiệm, KTV / Bác sĩ CĐHA) bấm *"Gọi số kế tiếp"*: hệ thống gọi ca đầu hàng trên màn hình sảnh và ứng dụng của chủ nuôi. Việc gọi số **không đổi trạng thái** ca / dịch vụ.
-  - Thông báo được lặp lại tối đa 3 lần (mỗi lần cách 60 giây). Nếu thú cưng vẫn chưa vào, người phụ trách phòng bấm **"Không có mặt – Lùi 1 bậc"**:
-    - Ca **đổi chỗ với ca liền sau** trong hàng đợi của phòng; ca vẫn nằm trong hàng đợi, không bị chuyển sang tab riêng.
-    - Trạng thái giữ nguyên (`WAITING` hoặc `RESULTS_READY` với hàng đợi phòng khám; `PENDING` với hàng đợi phòng CLS); chưa hao phí vật tư, hóa đơn dịch vụ giữ nguyên.
-    - Hệ thống tự gọi ca kế tiếp $\rightarrow$ **Phòng không bị treo.**
-    - Gửi **thông báo trên ứng dụng / Cổng thông tin** cho chủ nuôi biết lượt đã lùi 1 bậc (hệ thống không dùng SMS).
-  - Nếu không có ca nào phía sau, ca giữ nguyên vị trí và được gọi lại ở lần "Gọi số kế tiếp" sau.
-- **Biến động CSDL (trong một giao dịch, khóa 2 dòng liên quan để hai người không lùi cùng lúc):**
-  - Hàng đợi phòng khám: hoán đổi `pet_visits.queue_position` của ca vắng mặt với ca liền sau cùng `doctor_id`; ghi 01 dòng `pet_visit_status_histories` (`from_status = to_status` = trạng thái hiện tại, `action = 'SKIPPED'`, `changed_by_user_id` = Bác sĩ).
-  - Hàng đợi phòng CLS: hoán đổi `visit_service_details.queue_position` với dòng liền sau trong hàng đợi cùng phòng; ghi 01 dòng `visit_service_detail_histories` (`from_status = to_status = 'PENDING'`, `action = 'SKIPPED'`, `changed_by_user_id` = KTV).
-  - Số lần đã lùi trong lượt chờ hiện tại = số dòng `action = 'SKIPPED'` kể từ lần ca vào hàng đợi gần nhất (phân công, T06, chỉ định CLS hoặc bị đưa xuống cuối hàng); không lưu cột đếm riêng.
-
-### EX-07: Khách vắng mặt đến lần lùi thứ 3 và khi khách quay lại
-- **Bối cảnh thực tế:** Khách ra ngoài lâu; mỗi lần đến lượt lại vắng, ca cứ bị lùi 1 bậc nhưng vẫn quanh quẩn ở đầu hàng.
-- **Cơ chế xử lý nghiệp vụ:**
-  - Khi người phụ trách phòng bấm "Không có mặt – Lùi 1 bậc" lần thứ 3 trong cùng một lượt chờ, hệ thống **đưa ca xuống cuối hàng đợi của phòng** (thay vì lùi 1 bậc) và gửi cảnh báo cho Lễ tân: *"Ca [Tên Pet] đã vắng mặt 3 lần tại phòng [Số phòng], vui lòng liên hệ khách"*. Số 3 là tham số cấu hình được.
-  - Lượt chờ mới bắt đầu tính từ vị trí cuối hàng (số lần lùi về 0).
-  - **Khách quay lại:** khách báo Lễ tân hoặc bấm "Tôi đã có mặt" trên ứng dụng; ca hiển thị nhãn "Đã có mặt" và **chờ đến lượt bình thường** theo vị trí hiện tại (không ghim ưu tiên, không có thao tác "Gọi lại" riêng).
-  - **Khách không quay lại:** Lễ tân hủy ca nếu chưa khám (EX-03) hoặc đóng ca ghi công nợ nếu đã có dịch vụ được thực hiện (EX-11).
+### EX-06: Khách hàng vắng mặt khi gọi vào phòng Xét nghiệm / CĐHA
+- **Bối cảnh thực tế:** Đến lượt làm xét nghiệm/siêu âm, hệ thống hiển thị thông báo gọi lượt nhưng chủ nuôi đưa thú cưng ra ngoài đi dạo hoặc đi vệ sinh.
+- **Cơ chế xử lý nghiệp vụ (Gọi số & Đẩy lùi 1 bậc):**
+  - Kỹ thuật viên bấm *"Gọi số tiếp theo"*: hệ thống chọn dịch vụ đầu hàng đợi của phòng, kích hoạt thông báo trên màn hình sảnh và ứng dụng của chủ nuôi. Dịch vụ **vẫn giữ `PENDING`**.
+  - Gọi 2–3 lần (mỗi lần cách khoảng 60 giây) không thấy vào, Kỹ thuật viên bấm **"Đẩy lùi 1 bậc"**:
+    - Dịch vụ **giữ nguyên `PENDING`** (chưa hao phí vật tư y tế); hóa đơn dịch vụ giữ nguyên `PENDING`.
+    - Dịch vụ được xếp ra **ngay sau người kế tiếp** trong hàng đợi của phòng; người kế tiếp lên đầu và được gọi ngay $\rightarrow$ **Phòng máy không bị treo.**
+    - Không giới hạn số lần bị lùi; màn hình hiển thị số lần để KTV nhận biết. Nếu phía sau không còn ai, dịch vụ giữ nguyên vị trí.
+    - Gửi **thông báo trên ứng dụng / Cổng thông tin** cho chủ nuôi biết lượt đã bị lùi (hệ thống không dùng SMS).
 - **Biến động CSDL:**
-  - `queue_position` của ca = lớn hơn ca cuối cùng của hàng đợi phòng đó.
-  - Ghi 01 dòng lịch sử với `action = 'MOVED_TO_END'` (`pet_visit_status_histories` hoặc `visit_service_detail_histories`), trạng thái giữ nguyên.
+  - Bảng `visit_service_details`: `status` giữ nguyên `'PENDING'`; `skip_count + 1`; `queue_order` = trung bình cộng `queue_order` của dịch vụ ngay sau và dịch vụ sau nữa (không có dịch vụ sau nữa thì = dịch vụ ngay sau + 1; nếu người kế tiếp là ca cấp cứu chưa bị lùi thì = `queue_order` của dịch vụ thường đầu tiên − 1).
+  - Bảng `visit_service_detail_histories`: Ghi 01 dòng (`from_status = 'PENDING'`, `to_status = 'PENDING'`, `action = 'SKIPPED'`, `changed_by_user_id` = KTV).
+
+### EX-07: Khách hàng quay lại phòng máy sau khi bị đẩy lùi
+- **Bối cảnh thực tế:** Khách hàng quay lại sảnh phòng khám sau khi nhận thông báo trên ứng dụng.
+- **Cơ chế xử lý nghiệp vụ:**
+  - Dịch vụ của khách **vẫn nằm trong hàng đợi** (chỉ lùi 1 bậc mỗi lần), nên khách không cần báo lại hay xếp hàng lại từ đầu; khách chờ tới lượt.
+  - Khi đến lượt, Kỹ thuật viên bấm *"Gọi số tiếp theo"* như bình thường; khi thú cưng bước vào phòng thì bấm *"Bắt đầu thực hiện"* để chuyển sang `IN_PROGRESS`.
+- **Biến động CSDL:**
+  - Bảng `visit_service_detail_histories`: Ghi dòng `action = 'START_PROCESSING'` khi bắt đầu làm.
+  - Bảng `visit_service_details`: Cột `status` chuyển từ `'PENDING'` sang `'IN_PROGRESS'`.
 
 ### EX-08: Khách hàng xin hủy 1 trong các dịch vụ cận lâm sàng giữa chừng
 - **Bối cảnh thực tế:** Bác sĩ chỉ định cả Xét nghiệm máu và Siêu âm bụng. Thú cưng đã lấy máu xong và có kết quả (`COMPLETED`), nhưng khi sang phòng CĐHA, thú cưng quá hoảng loạn/hung dữ hoặc chủ nuôi không đủ kinh phí nên xin hủy không siêu âm nữa.
@@ -159,29 +149,30 @@
 - **Dữ liệu để phân biệt:** Quy trình Lab có 2 thao tác ghi lịch sử: *"Bắt đầu thực hiện"* (`action = 'START_PROCESSING'`, thú cưng đang ở phòng Lab) và *"Đã lấy mẫu"* (`action = 'SAMPLE_COLLECTED'`, thú cưng đã rời phòng, máy đang phân tích). Nhờ đó hệ thống phân biệt được "đang lấy máu" với "máy đang chạy".
 - **Cơ chế xử lý nghiệp vụ:**
   - Khi dịch vụ Lab của cùng ca đang `IN_PROGRESS` **và** `action` mới nhất là `START_PROCESSING`, màn hình CĐHA hiển thị huy hiệu `🟡 [Đang lấy máu bên phòng Lab]`. Khi `action` mới nhất là `SAMPLE_COLLECTED`, huy hiệu đổi thành `🟢 [Đã lấy máu, sẵn sàng chụp]`.
-  - Khi Bác sĩ CĐHA bấm *"Gọi số kế tiếp"*, hệ thống **tự bỏ qua** ca đang có huy hiệu vàng và gọi ca liền sau. Ca bị bỏ qua **giữ nguyên vị trí**, không tính là vắng mặt, không ghi `SKIPPED`.
-  - Khi KTV Lab bấm "Đã lấy mẫu", ca này lại đủ điều kiện và được gọi ở lần "Gọi số kế tiếp" sau theo đúng vị trí của nó.
-  - Quy tắc đối xứng: phòng Xét nghiệm tự bỏ qua ca đang được chụp / siêu âm ở phòng CĐHA (dịch vụ CĐHA của cùng ca đang `IN_PROGRESS`).
+  - Nếu đang lấy máu, Bác sĩ CĐHA bấm *"Đẩy lùi 1 bậc"* (EX-06): dịch vụ CĐHA giữ `PENDING`, xếp ra sau người kế tiếp, phòng gọi ngay người đó vào siêu âm.
+  - Thú cưng lấy máu xong sẽ được phòng CĐHA gọi ở lượt kế tiếp (thường chỉ sau 1 người), không cần thao tác gọi lại.
 - **Biến động CSDL:**
-  - Bảng `visit_service_details` (dòng CĐHA): Giữ nguyên `'PENDING'` và `queue_position`.
-  - Không ghi dòng lịch sử nào cho việc bỏ qua (điều kiện bỏ qua được tính từ dữ liệu dòng Lab tại thời điểm gọi số).
-  - Giá trị `SAMPLE_COLLECTED` là giá trị của cột `action` (`VARCHAR(50)`), không thay đổi cấu trúc bảng.
+  - Bảng `visit_service_details` (dòng CĐHA): Giữ nguyên `'PENDING'`.
+  - Bảng `visit_service_details` (dòng CĐHA): `skip_count + 1`, `queue_order` đổi theo EX-06.
+  - Bảng `visit_service_detail_histories` (dòng CĐHA): Ghi `action = 'SKIPPED'`.
+  - Giá trị `SAMPLE_COLLECTED` là giá trị mới của cột `action` (`VARCHAR(50)`), không thay đổi cấu trúc bảng.
 
 ---
 
 ## 5. PHÂN HỆ 4: HỘI CHẨN GIAI ĐOẠN 2, HÀNG ĐỢI TÁI KHÁM & KÊ ĐƠN
 
-### EX-10: Bác sĩ khám chính gọi ca có kết quả nhưng khách chưa vào phòng ngay
-- **Bối cảnh thực tế:** Ca khám đã có đủ kết quả (`RESULTS_READY`) và đang đứng đầu hàng đợi phòng Bác sĩ. Bác sĩ bấm *"Gọi số kế tiếp"* nhưng khách bận ra ngoài nghe điện thoại.
+### EX-10: Bác sĩ gọi số nhưng khách chưa vào phòng (Giai đoạn 1 hoặc Giai đoạn 2)
+- **Bối cảnh thực tế:** Đến lượt trong hàng đợi của Bác sĩ (ca mới `WAITING` hoặc ca có kết quả `RESULTS_READY`), Bác sĩ bấm *"Gọi số tiếp theo"* nhưng khách bận ra ngoài nghe điện thoại.
 - **Cơ chế xử lý nghiệp vụ:**
-  - Gọi số **không đổi trạng thái**: ca vẫn `RESULTS_READY` cho đến khi thú cưng vào phòng và Bác sĩ bấm *"Tiếp tục khám (GĐ 2)"* (T07).
-  - Thông báo gọi tối đa 3 lần không vào, Bác sĩ bấm **"Không có mặt – Lùi 1 bậc"** (như EX-06): ca đổi chỗ với ca liền sau trong hàng đợi phòng, hệ thống gọi ca kế tiếp. Đến lần thứ 3 thì đưa xuống cuối hàng (EX-07).
-  - Khi đến lượt lại, ca được gọi bình thường. Không còn tab *"Ca chờ tái khám / Đã hoãn"* và thao tác *"Gọi lại"* (Recall).
-  - **Không còn tác động lên phân công:** Bác sĩ không bị "khóa" hay "giải phóng" vì ca vắng mặt; Lễ tân phân ca mới vào phòng bất cứ lúc nào (BR-11).
+  - Bác sĩ **gọi số trước, đổi trạng thái sau**: bấm *"Gọi số tiếp theo"* chỉ phát thông báo (`PatientCalledEvent`), ca giữ nguyên trạng thái; chỉ khi thú cưng vào phòng Bác sĩ mới bấm *"Bắt đầu khám"* (T02) hoặc *"Bắt đầu Giai đoạn 2"* (T07).
+  - Thông báo gọi 2–3 lần không vào, Bác sĩ bấm **"Đẩy lùi 1 bậc"**:
+    - Ca giữ nguyên `WAITING` / `RESULTS_READY`, được xếp ra **ngay sau người kế tiếp** trong hàng đợi của Bác sĩ; hệ thống gọi ngay người kế tiếp.
+    - Không giới hạn số lần; hiển thị số lần bị lùi. Ca cấp cứu đã bị lùi được xếp như ca thường. Không còn ai phía sau thì ca giữ nguyên vị trí.
+    - Bác sĩ vẫn `AVAILABLE` (chưa khám ai) nên gọi tiếp được ngay; không cần tab "Đã hoãn" hay thao tác "Gọi lại".
+  - Khi khách quay lại: khách chờ tới lượt; Bác sĩ gọi đến thì tiếp tục như bình thường.
 - **Biến động CSDL:**
-  - Bảng `pet_visits`: `status` giữ `'RESULTS_READY'`; `queue_position` hoán đổi với ca liền sau.
-  - Bảng `pet_visit_status_histories`: Ghi 01 dòng `action = 'SKIPPED'` (`from_status = to_status = 'RESULTS_READY'`, `changed_by_user_id` = Bác sĩ).
-  - Chuyển trạng thái T13 (`IN_PROGRESS → RESULTS_READY`) và dấu hiệu "đã hoãn" `from_status = IN_PROGRESS` **không còn dùng**.
+  - Bảng `pet_visits`: `status` không đổi; `skip_count + 1`; `queue_order` = trung bình cộng `queue_order` của ca ngay sau và ca sau nữa (không có ca sau nữa thì = ca ngay sau + 1; nếu người kế tiếp là ca cấp cứu chưa bị lùi thì = `queue_order` của ca thường đầu tiên − 1); kiểm tra `version`.
+  - Không ghi `pet_visit_status_histories` vì trạng thái không đổi. Bước chuyển T13 (hoãn ngược `IN_PROGRESS → RESULTS_READY`) của bản trước được bỏ.
 
 ### EX-11: Khách hàng bỏ về hẳn không quay lại đọc kết quả cận lâm sàng
 - **Bối cảnh thực tế:** Khách đã làm xét nghiệm và chụp chiếu (hoặc mới làm xong một phần) nhưng tự ý bế thú cưng về nhà; Lễ tân gọi điện xác nhận khách không quay lại, hoặc đã hết ngày làm việc.
@@ -280,10 +271,4 @@ Toàn bộ 16 trường hợp ngoại lệ trên được thiết kế đồng b
 | EX-16 | Dựa vào `prescriptions.status = DISPENSED` | Dựa vào `medicine_invoices.prescription_id UNIQUE` và trạng thái `PAID` + `version` | Bỏ `PrescriptionStatus` |
 | Liên kết tài liệu | Đường dẫn tuyệt đối `file:///c:/Users/...` | Đường dẫn tương đối trong thư mục đồ án | Mở được trên máy mọi thành viên / GitHub |
 | EX-15, EX-16 (rà soát 10/11) | "Giảm số lượng rồi xác nhận lại" nhưng không có cách sửa hóa đơn; hóa đơn thứ hai bị `UNIQUE` chặn | Sửa dòng hóa đơn thuốc khi `PENDING` qua API riêng; hủy hóa đơn là kết thúc | Luồng xử lý thực hiện được với ràng buộc `prescription_id UNIQUE` |
-| Quy ước chung (cập nhật 11/11) | Hàng đợi sảnh chung; T01–T14 | Mỗi phòng một hàng đợi, thứ tự theo `queue_position`; lùi 1 bậc ghi `action = 'SKIPPED'`; T13 đã bỏ | Hàng đợi riêng theo phòng (BR-11, BR-34) |
-| EX-02, EX-03 (cập nhật 11/11) | Xếp vào hàng đợi sảnh; hủy ca "rút khỏi hàng đợi chung", Bác sĩ đã gán tự được giải phóng | Phân công ngay vào hàng đợi phòng Bác sĩ; hủy ca thì ca rời hàng đợi phòng, các ca sau tự tiến lên; phân công không làm Bác sĩ "bận" nên không có gì để giải phóng | Không còn hàng đợi chung |
-| EX-04 (cập nhật 11/11) | Nhảy lên vị trí số 1 "của tất cả hàng đợi"; `ORDER BY is_emergency DESC, checked_in_at` | Chèn đầu hàng đợi của phòng mà ca vào (sau các ca cấp cứu khác); sắp theo `queue_position` | Mỗi phòng một hàng đợi; thứ tự có thể đổi do lùi 1 bậc nên không suy ra được từ `checked_in_at` |
-| EX-05 (cập nhật 11/11) | Khóa ưu tiên: chặn phân công khi Bác sĩ có ca vừa có kết quả (`AVAILABLE_PRIORITY_CALLBACK`) | Ca có kết quả tự chèn vào hàng đợi phòng Bác sĩ ngay sau ca cấp cứu; không chặn phân công | Ưu tiên bằng vị trí trong hàng đợi thay cho khóa |
-| EX-06, EX-07 (cập nhật 11/11) | Chỉ cho phòng CLS: "Tạm hoãn" sang tab riêng (`POSTPONED`), quay lại thì ghim "Ưu tiên kế tiếp" (`RECALL`) | Áp dụng cho mọi phòng: "Lùi 1 bậc" (`SKIPPED`) đổi chỗ với ca liền sau; lần thứ 3 đưa xuống cuối hàng (`MOVED_TO_END`) và báo Lễ tân; khách quay lại chờ đến lượt | Thống nhất một cơ chế vắng mặt cho phòng khám và phòng CLS |
-| EX-09 (cập nhật 11/11) | Bác sĩ CĐHA bấm "Tạm hoãn" rồi "Gọi lại" | Hệ thống tự bỏ qua ca đang ở phòng Lab khi gọi số, ca giữ nguyên vị trí | Thú cưng bận ở phòng khác không phải lỗi vắng mặt của khách |
-| EX-10 (cập nhật 11/11) | Gọi → `IN_PROGRESS`, hoãn → `RESULTS_READY` (T13); Bác sĩ `BUSY` → `AVAILABLE`; dấu hiệu "đã hoãn" `from_status = IN_PROGRESS` | Gọi số không đổi trạng thái; vắng mặt thì lùi 1 bậc, ca giữ `RESULTS_READY`; bỏ T13 | Đơn giản hóa; không còn ràng buộc với phân công |
+| EX-02 → EX-07, EX-09, EX-10 (rà soát 11/11) | Hàng đợi sảnh chung; EX-05 Khóa ưu tiên chặn Lễ tân; EX-06 tạm hoãn sang tab riêng; EX-07 Recall ghim "Ưu tiên kế tiếp"; EX-09 tạm hoãn + Recall; EX-10 hoãn ngược `IN_PROGRESS → RESULTS_READY` (T13) | Hàng đợi riêng từng Bác sĩ; EX-05 không chặn, ca có kết quả đã đứng đầu hàng đợi; EX-06, EX-09, EX-10 "Đẩy lùi 1 bậc" (xếp ra sau người kế tiếp, không giới hạn); EX-07 khách quay lại chỉ chờ tới lượt | Lễ tân không phải chờ Bác sĩ rảnh; một cơ chế gọi số cho phòng khám, Xét nghiệm, CĐHA |
