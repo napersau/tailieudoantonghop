@@ -165,7 +165,7 @@ Nhằm đồng bộ hoàn toàn giữa **Spring Cloud Gateway**, **Controller** 
 | :--- | :--- | :--- | :--- |
 | **`auth-service`** | `/api/v1/auth/**` | `GET /api/v1/auth/users` | `POST /api/v1/auth/login`<br>`POST /api/v1/auth/refresh` |
 | **`appointment-service`** | `/api/v1/appointments/**` | `GET /api/v1/appointments`<br>`GET /api/v1/appointments/slots?date=` | `POST /api/v1/appointments/{id}/confirm`<br>`POST /api/v1/appointments/{id}/cancel` |
-| **`clinical-service`** | `/api/v1/clinical/**`<br>`/api/v1/pets/**`<br>`/api/v1/species/**` | `GET /api/v1/clinical/pet-visits`<br>`GET /api/v1/clinical/pet-visits/queue` (bảng điều phối)<br>`GET /api/v1/clinical/pet-visits/my-queue` (hàng đợi Bác sĩ)<br>`GET /api/v1/clinical/lab-queue`, `/imaging-queue` (hàng đợi XN / CĐHA)<br>`GET /api/v1/clinical/doctors/status`<br>`GET /api/v1/clinical/pet-visits/{id}/service-invoices`<br>`GET /api/v1/pets/{id}` | `POST /api/v1/clinical/pet-visits/check-in`<br>`POST /api/v1/clinical/pet-visits/{id}/assign-doctor`, `/unassign-doctor`<br>`POST /api/v1/clinical/pet-visits/call-next`<br>`POST /api/v1/clinical/lab-queue/call-next`, `/imaging-queue/call-next`<br>`POST /api/v1/clinical/pet-visits/{id}/skip`<br>`POST /api/v1/clinical/service-details/{id}/skip`<br>`POST /api/v1/clinical/pet-visits/{id}/start-exam`<br>`POST /api/v1/clinical/pet-visits/{id}/start-phase2`<br>`POST /api/v1/clinical/pet-visits/{id}/close-visit`<br>`POST /api/v1/clinical/pet-visits/{id}/reopen`<br>`POST /api/v1/clinical/service-invoices/{id}/discount`<br>`POST /api/v1/clinical/pet-visits/{id}/service-invoices/confirm-payment` |
+| **`clinical-service`** | `/api/v1/clinical/**`<br>`/api/v1/pets/**`<br>`/api/v1/species/**` | `GET /api/v1/clinical/pet-visits`<br>`GET /api/v1/clinical/pet-visits/queue` (bảng điều phối)<br>`GET /api/v1/clinical/pet-visits/my-queue` (hàng đợi Bác sĩ)<br>`GET /api/v1/clinical/lab-queue`, `/imaging-queue` (hàng đợi XN / CĐHA)<br>`GET /api/v1/clinical/doctors/status`<br>`GET /api/v1/clinical/pet-visits/{id}/service-invoices`<br>`GET /api/v1/pets/{id}` | `POST /api/v1/clinical/pet-visits/check-in`<br>`POST /api/v1/clinical/pet-visits/{id}/assign-doctor`, `/unassign-doctor`<br>`POST /api/v1/clinical/pet-visits/call-next`<br>`POST /api/v1/clinical/lab-queue/call-next`, `/imaging-queue/call-next`<br>`POST /api/v1/clinical/pet-visits/{id}/call`<br>`POST /api/v1/clinical/service-details/{id}/call`<br>`POST /api/v1/clinical/pet-visits/{id}/start-exam`<br>`POST /api/v1/clinical/pet-visits/{id}/start-phase2`<br>`POST /api/v1/clinical/pet-visits/{id}/close-visit`<br>`POST /api/v1/clinical/pet-visits/{id}/reopen`<br>`POST /api/v1/clinical/service-invoices/{id}/discount`<br>`POST /api/v1/clinical/pet-visits/{id}/service-invoices/confirm-payment` |
 | **`billing-pharmacy-service`** | `/api/v1/pharmacy/**`<br>`/api/v1/billing/**` | `GET /api/v1/pharmacy/medicines`<br>`GET /api/v1/pharmacy/prescriptions/{id}`<br>`GET /api/v1/billing/medicine-invoices/{id}` | `POST /api/v1/pharmacy/prescriptions/{id}/medicine-invoices` (lập hóa đơn thuốc)<br>`PUT /api/v1/billing/medicine-invoices/{id}/items` (sửa dòng khi `PENDING`)<br>`POST /api/v1/billing/medicine-invoices/{id}/confirm-payment` (thu tiền + trừ kho)<br>`POST /api/v1/billing/medicine-invoices/{id}/cancel` |
 | **`notification-service`** | `/api/v1/notifications/**`<br>`/ws/**` | `GET /api/v1/notifications` (thông báo của người dùng hiện tại) | `POST /api/v1/notifications/{id}/read`. Không có API gửi email công khai: Email / WebSocket chỉ được kích hoạt bởi sự kiện RabbitMQ. |
 
@@ -1453,7 +1453,7 @@ public class PetVisitResponse {
     private String clinicalNotes;
     private VisitStatus status;
     private Instant checkedInAt;
-    private int skipCount;         // Số lần bị "Đẩy lùi 1 bậc" – hiển thị trên hàng đợi
+    private Instant lastCalledAt;  // Lần "Gọi" gần nhất; null = chưa gọi (hiển thị nhãn "Đã gọi HH:mm")
 }
 ```
 
@@ -1508,12 +1508,12 @@ public interface PetVisitRepository extends JpaRepository<PetVisit, Long> {
 
     boolean existsByDoctorIdAndStatus(Long doctorId, VisitStatus status);
 
-    // Hàng đợi riêng của Bác sĩ (Q1): ca WAITING / RESULTS_READY, cấp cứu chưa bị lùi lên đầu, rồi queue_order
+    // Hàng đợi riêng của Bác sĩ (Q1): ca WAITING / RESULTS_READY, cấp cứu lên đầu, rồi queue_order
     // Index idx_visits_queue (doctor_id, status, is_emergency, queue_order)
     @Query("""
             SELECT v FROM PetVisit v
             WHERE v.doctorId = :doctorId AND v.status IN :statuses
-            ORDER BY CASE WHEN v.emergency = true AND v.skipCount = 0 THEN 0 ELSE 1 END, v.queueOrder
+            ORDER BY CASE WHEN v.emergency = true THEN 0 ELSE 1 END, v.queueOrder
             """)
     List<PetVisit> findDoctorQueue(@Param("doctorId") Long doctorId,
                                    @Param("statuses") Collection<VisitStatus> statuses);
@@ -1522,7 +1522,7 @@ public interface PetVisitRepository extends JpaRepository<PetVisit, Long> {
     @Query("""
             SELECT v FROM PetVisit v
             WHERE v.doctorId IS NULL AND v.status = :waiting
-            ORDER BY CASE WHEN v.emergency = true AND v.skipCount = 0 THEN 0 ELSE 1 END, v.queueOrder
+            ORDER BY CASE WHEN v.emergency = true THEN 0 ELSE 1 END, v.queueOrder
             """)
     List<PetVisit> findUnassigned(@Param("waiting") VisitStatus waiting);
 
@@ -1644,9 +1644,9 @@ public class PetVisitServiceImpl implements PetVisitService {
 }
 ```
 
-#### 6b. Hàng đợi riêng của Bác sĩ: Gọi số & Đẩy lùi 1 bậc (`DoctorQueueServiceImpl.java`)
+#### 6b. Hàng đợi riêng của Bác sĩ: Gọi theo từng dòng (`DoctorQueueServiceImpl.java`)
 
-Áp dụng quy tắc Q1–Q5 (State Machine mục 2.4, BR-34). Gọi số và đẩy lùi **không đổi trạng thái** ca nên không ghi `pet_visit_status_histories`. Hàng đợi phòng Xét nghiệm / CĐHA dùng cùng hàm `skipBehindNext` cho `VisitServiceDetail`.
+Áp dụng quy tắc Q1–Q5 (State Machine mục 2.4, BR-34). "Gọi" **không đổi trạng thái và không đổi thứ tự** ca nên không ghi `pet_visit_status_histories` và không sửa `queue_order`; chỉ ghi `lastCalledAt` để đánh dấu ca đã được gọi. Hàng đợi phòng Xét nghiệm / CĐHA (`ParaclinicServiceImpl`) dùng cùng nguyên tắc cho `VisitServiceDetail`, nhưng các chỉ định `PENDING` của cùng một đợt khám trong cùng phòng được **gộp thành một ca** (gọi một lần, bắt đầu cả ca).
 
 ```java
 package com.vetclinic.clinical.util;
@@ -1673,63 +1673,50 @@ public class DoctorQueueServiceImpl implements DoctorQueueService {
     private final ApplicationEventPublisher eventPublisher;
     private final PetVisitMapper petVisitMapper;
 
-    /** Q3 – Bác sĩ gọi số tiếp theo (UC-22 Bước 1, UC-30 Bước 2). Ca chưa đổi trạng thái. */
+    /** Q3 – "Gọi số tiếp theo": phím tắt gọi người đứng đầu (UC-22 Bước 1, UC-30 Bước 2). Ca chưa đổi trạng thái. */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PetVisitResponse callNext() {
         Long doctorId = SecurityUtils.getCurrentUserId();
-        if (petVisitRepository.existsByDoctorIdAndStatus(doctorId, VisitStatus.IN_PROGRESS)) {
-            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE);              // BR-12
-        }
+        assertNotExamining(doctorId);                                           // BR-12
         PetVisit head = petVisitRepository.findDoctorQueue(doctorId, IN_QUEUE).stream().findFirst()
                 .orElseThrow(() -> new AppException(ErrorCode.QUEUE_EMPTY));
+        head.setLastCalledAt(Instant.now());                                   // đánh dấu "Đã gọi"; flush khi commit
         eventPublisher.publishEvent(new PatientCalledEvent(head.getId(), doctorId, "DOCTOR_ROOM"));
         return petVisitMapper.toResponse(head);
     }
 
-    /** Q4 – Đẩy lùi 1 bậc: ca đứng ngay sau người kế tiếp; không giới hạn số lần (EX-10). */
+    /**
+     * Q3 – "Gọi" một ca bất kỳ trong hàng đợi của mình (không nhất thiết đứng đầu). Khách vắng thì gọi ca khác; khách quay lại thì gọi lại.
+     * Ghi lastCalledAt và phát PatientCalledEvent: KHÔNG đổi trạng thái, KHÔNG đổi queue_order.
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public PetVisitResponse skip(Long visitId) {
+    public PetVisitResponse call(Long visitId) {
         Long doctorId = SecurityUtils.getCurrentUserId();
-        List<PetVisit> queue = petVisitRepository.findDoctorQueue(doctorId, IN_QUEUE);
-        int i = indexOf(queue, visitId);                                       // ném NOT_ASSIGNED_DOCTOR nếu không thuộc hàng đợi
-        PetVisit current = queue.get(i);
-        if (i == queue.size() - 1) {
-            return petVisitMapper.toResponse(current);                          // không còn ai phía sau: giữ nguyên
+        PetVisit visit = petVisitRepository.findById(visitId)
+                .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
+        if (!doctorId.equals(visit.getDoctorId())) {
+            throw new AppException(ErrorCode.NOT_ASSIGNED_DOCTOR);              // CLIN_1311
         }
-        PetVisit next = queue.get(i + 1);                                       // người kế tiếp theo thứ tự cũ
-        current.setSkipCount(current.getSkipCount() + 1);                       // ca bị lùi luôn thuộc nhóm ca thường
-        List<PetVisit> rest = petVisitRepository.findDoctorQueue(doctorId, IN_QUEUE).stream()
-                .filter(v -> !v.getId().equals(visitId)).toList();              // thứ tự mới (auto-flush skipCount)
-        if (isPriority(next)) {
-            // Người kế tiếp là ca cấp cứu: ca bị lùi đứng đầu nhóm ca thường
-            rest.stream().filter(v -> !isPriority(v)).findFirst()
-                    .ifPresent(firstNormal -> current.setQueueOrder(firstNormal.getQueueOrder() - 1));
-        } else {
-            int j = rest.indexOf(next);
-            current.setQueueOrder(j + 1 < rest.size()
-                    ? next.getQueueOrder() + (rest.get(j + 1).getQueueOrder() - next.getQueueOrder()) / 2
-                    : next.getQueueOrder() + 1);                                // @Version chống hai thao tác trùng
+        if (!IN_QUEUE.contains(visit.getStatus())) {
+            throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);        // chỉ gọi ca WAITING / RESULTS_READY
         }
-        eventPublisher.publishEvent(new PatientCalledEvent(next.getId(), doctorId, "DOCTOR_ROOM"));
-        return petVisitMapper.toResponse(next);                                 // người được gọi tiếp
+        assertNotExamining(doctorId);                                           // CLIN_1302: đang khám dở thì chưa gọi thêm
+        visit.setLastCalledAt(Instant.now());                                  // gọi lại cũng chỉ cập nhật mốc này
+        eventPublisher.publishEvent(new PatientCalledEvent(visit.getId(), doctorId, "DOCTOR_ROOM"));
+        return petVisitMapper.toResponse(visit);
     }
 
-    private boolean isPriority(PetVisit v) {                                    // nhóm cấp cứu chưa bị lùi
-        return v.isEmergency() && v.getSkipCount() == 0;
-    }
-
-    private int indexOf(List<PetVisit> queue, Long visitId) {
-        for (int k = 0; k < queue.size(); k++) {
-            if (queue.get(k).getId().equals(visitId)) return k;
+    private void assertNotExamining(Long doctorId) {
+        if (petVisitRepository.existsByDoctorIdAndStatus(doctorId, VisitStatus.IN_PROGRESS)) {
+            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE);
         }
-        throw new AppException(ErrorCode.NOT_ASSIGNED_DOCTOR);
     }
 }
 ```
 
-> **Lưu ý:** `rest` được tải lại sau khi đổi `skipCount` để lấy đúng thứ tự khi ca cấp cứu vừa rời nhóm ưu tiên (đã kiểm chứng bằng mô phỏng: `[A, B, C]` lùi `A` → `[B, A, C]`; `[E*, A, B]` lùi `E` → `[A, E, B]`; `[E2*, E*, A]` lùi `E2` → `[E*, E2, A]`). Khi T06 đưa ca về `RESULTS_READY`, đặt `queueOrder = findMinQueueOrder(doctorId, IN_QUEUE).orElse(QueueOrders.now()) - 1` và `skipCount = 0`. Phân công (`assign-doctor`) chỉ kiểm tra ca còn `WAITING` và Bác sĩ `ACTIVE`, **không** kiểm tra Bác sĩ rảnh.
+> **Lưu ý (cập nhật 13/11/2026):** bản v3.0 đầu tiên dùng "Đẩy lùi 1 bậc" (ca xuống ngay sau người kế tiếp). Khi hai ca đầu hàng cùng vắng, hai ca đó đổi chỗ cho nhau mãi (`[A, B, C, D]`: lùi `A` → `[B, A, C, D]`; lùi `B` → `[A, B, C, D]`) nên ca thứ ba, thứ tư không bao giờ được gọi, và ca cấp cứu bị lùi còn mất ưu tiên. Vì vậy giao diện dùng "Gọi" theo từng dòng; API `skip` cùng cột `skip_count` đã được xóa. Khi T06 đưa ca về `RESULTS_READY`, đặt `queueOrder = findMinQueueOrder(doctorId, IN_QUEUE).orElse(QueueOrders.now()) - 1`. Phân công (`assign-doctor`) chỉ kiểm tra ca còn `WAITING` và Bác sĩ `ACTIVE`, **không** kiểm tra Bác sĩ rảnh.
 
 #### 7. REST Controller (`PetVisitController.java`) – làm giàu dữ liệu qua Feign **sau khi** giao dịch đã commit
 ```java
@@ -1875,3 +1862,5 @@ public class AppointmentNoShowScheduler {
 | 8.3 (rà soát 10/11) | Hóa đơn `CANCELLED` báo `BILL_1403`; id không thuộc ca bị bỏ qua; so sánh enum bằng chuỗi trong JPQL | Báo `BILL_1408`; kiểm tra đủ id (`BILL_1401`); truyền enum qua tham số | Mã lỗi đúng, không bỏ sót dữ liệu sai |
 | Tổng kết (rà soát 10/11) | "Sprint 1 - Tuần 8" | Sprint 1 - Tuần 9 | Khớp Kế hoạch |
 | 3.2, 5.1, 11.2 (rà soát 11/11) | `findWaitingQueue()` hàng đợi sảnh chung; `CLIN_1303 DOCTOR_PRIORITY_LOCKED`; không có API gọi số / đẩy lùi | Hàng đợi riêng từng Bác sĩ: `findDoctorQueue`, `findUnassigned`, `countWaitingByDoctor`; `DoctorQueueServiceImpl` (`callNext`, `skip`), `QueueOrders`; `CLIN_1303 QUEUE_EMPTY` (vẫn 39 mã); thêm `GET …/queue`, `…/my-queue`, `POST …/call-next`, `…/{id}/skip`, `service-details/{id}/skip` | Mô hình hàng đợi riêng + Đẩy lùi 1 bậc |
+| 3.2, 6b (cập nhật 13/11) | `POST …/{id}/skip`, `service-details/{id}/skip`; mã mẫu `skip` (Đẩy lùi 1 bậc) và ghi chú về `rest` | `POST …/{id}/call`, `service-details/{id}/call`; mã mẫu `call` (không đổi trạng thái/thứ tự); ghi chú vì sao bỏ đẩy lùi | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi và làm ca cấp cứu mất ưu tiên; gọi theo từng dòng giống thực tế phòng khám |
+| 3.1, 6b (rà soát 13/11) | `call` / `callNext` chỉ phát sự kiện, không lưu ca đã được gọi | `PetVisitResponse.lastCalledAt`; `call` / `callNext` ghi `lastCalledAt = Instant.now()` (entity có `@Version`); phòng CLS ghi cho mọi dịch vụ `PENDING` của ca | Màn hình đánh dấu "Đã gọi HH:mm" theo yêu cầu nghiệp vụ |

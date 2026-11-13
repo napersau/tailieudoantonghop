@@ -24,9 +24,11 @@
 -- (5) Bổ sung bảng nối service_lab_test_items: gói xét nghiệm gồm những chỉ số nào.
 -- (6) Bổ sung cột version (khóa lạc quan @Version) cho các bảng có cập nhật đồng thời.
 -- (7) [Rà soát 11/11] Hàng đợi riêng cho từng Bác sĩ và cho phòng Xét nghiệm / CĐHA:
---     cột queue_order + skip_count ở pet_visits và visit_service_details.
---     Thứ tự: ORDER BY (is_emergency AND skip_count = 0) DESC, queue_order.
---     Gọi không thấy khách -> "Đẩy lùi 1 bậc": ca xếp ra ngay sau người kế tiếp.
+--     cột queue_order ở pet_visits và visit_service_details.
+--     Thứ tự: ORDER BY is_emergency DESC, queue_order.
+--     [Cập nhật 13/11/2026] Gọi theo từng dòng: bác sĩ / KTV bấm "Gọi" ở dòng bất kỳ, không đổi thứ tự (queue_order giữ nguyên).
+--     Đã BỎ cơ chế "Đẩy lùi 1 bậc" cùng cột skip_count và hành động SKIPPED (làm hai ca đầu hàng đổi chỗ mãi mãi).
+--     Mỗi lần "Gọi" ghi last_called_at = thời điểm gọi để màn hình đánh dấu ca "Đã gọi HH:mm" (không dùng để xếp thứ tự).
 --
 -- NGUYÊN TẮC TOÀN VẸN DỮ LIỆU LIÊN DỊCH VỤ:
 -- - Bảng cùng Service: ràng buộc FOREIGN KEY vật lý.
@@ -34,6 +36,10 @@
 --   Các cột này được đánh dấu chú thích "LFK: <db>.<bảng>".
 -- - Giá trị tiền thanh toán KHÔNG lưu, được tính bằng VIEW (xem cuối mỗi phần).
 -- ==============================================================================
+
+-- [12/11] Bắt buộc: client mysql trong entrypoint Docker mặc định dùng latin1,
+-- thiếu dòng này tiếng Việt trong seed bị mã hóa 2 lần.
+SET NAMES utf8mb4;
 
 
 -- ==============================================================================
@@ -88,9 +94,9 @@ INSERT INTO roles (code, name, description) VALUES
 ('IMAGING_TECHNICIAN', 'Bác sĩ / KTV Chẩn đoán hình ảnh', 'Siêu âm, chụp X-quang, tải tệp ảnh và kết luận hình thái học'),
 ('PET_OWNER', 'Chủ thú cưng', 'Đặt lịch trực tuyến, theo dõi hồ sơ bệnh án và đơn thuốc');
 
--- Tài khoản Admin mặc định (mật khẩu: Admin@123 - cần kiểm tra lại hash trước khi demo)
+-- Tài khoản Admin mặc định (mật khẩu: Admin@123, BCrypt strength 12 - đã kiểm tra bằng bcrypt.checkpw ngày 12/11)
 INSERT INTO users (role_id, username, password_hash, full_name, phone_number, email, status) VALUES
-(1, 'admin', '$2a$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', 'Quản trị viên hệ thống', '0901234567', 'admin@vetclinic.com', 'ACTIVE');
+(1, 'admin', '$2a$12$QfxJtMwsg2Wd72ZkvcQ.BeADCJqgMjJ7OPeBqNkj1um98Jt/dcBPG', 'Quản trị viên hệ thống', '0901234567', 'admin@vetclinic.com', 'ACTIVE');
 
 
 -- ==============================================================================
@@ -233,11 +239,10 @@ CREATE TABLE IF NOT EXISTS pet_visits (
     doctor_advice TEXT NULL,
     status ENUM('WAITING', 'IN_PROGRESS', 'WAITING_RESULTS', 'RESULTS_READY', 'WAITING_PAYMENT', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'WAITING',
     checked_in_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    queue_order BIGINT NOT NULL, -- Thứ tự trong hàng đợi (nhỏ gọi trước). Gán = thời điểm tiếp nhận (epoch micro giây); "Đẩy lùi 1 bậc" đặt ra ngay sau người kế tiếp; ca vừa có kết quả CLS = nhỏ nhất hàng đợi - 1
-    skip_count INT NOT NULL DEFAULT 0, -- Số lần bị "Đẩy lùi 1 bậc" (không giới hạn). Ca cấp cứu đã bị lùi (skip_count > 0) xếp như ca thường
+    queue_order BIGINT NOT NULL, -- Thứ tự trong hàng đợi (nhỏ gọi trước). Gán = thời điểm tiếp nhận (epoch micro giây), không đổi khi gọi; ca vừa có kết quả CLS = nhỏ nhất hàng đợi - 1
+    last_called_at TIMESTAMP NULL, -- Lần "Gọi" / "Gọi lại" gần nhất của Bác sĩ; NULL = chưa được gọi. Chỉ để hiển thị "Đã gọi", không ảnh hưởng thứ tự
     version BIGINT NOT NULL DEFAULT 0, -- Khóa lạc quan
-    CONSTRAINT fk_visits_pet FOREIGN KEY (pet_id) REFERENCES pets(id),
-    CONSTRAINT chk_visits_skip CHECK (skip_count >= 0)
+    CONSTRAINT fk_visits_pet FOREIGN KEY (pet_id) REFERENCES pets(id)
 );
 CREATE INDEX idx_visits_pet ON pet_visits(pet_id);
 CREATE INDEX idx_visits_doctor_status ON pet_visits(doctor_id, status);
@@ -269,24 +274,23 @@ CREATE TABLE IF NOT EXISTS visit_service_details (
     status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
     notes TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    queue_order BIGINT NOT NULL, -- Thứ tự trong hàng đợi phòng XN / CĐHA (nhỏ gọi trước). Gán = thời điểm chỉ định (epoch micro giây); "Đẩy lùi 1 bậc" như pet_visits
-    skip_count INT NOT NULL DEFAULT 0, -- Số lần bị "Đẩy lùi 1 bậc"; dùng trong thứ tự hàng đợi (ca cấp cứu đã bị lùi xếp như ca thường)
+    queue_order BIGINT NOT NULL, -- Thứ tự trong hàng đợi phòng XN / CĐHA (nhỏ gọi trước). Gán = thời điểm chỉ định (epoch micro giây), không đổi khi gọi
+    last_called_at TIMESTAMP NULL, -- Lần KTV "Gọi" / "Gọi lại" gần nhất; gọi một ca thì cập nhật mọi dịch vụ PENDING cùng đợt khám, cùng phòng. NULL = chưa được gọi
     CONSTRAINT fk_vsd_visit FOREIGN KEY (visit_id) REFERENCES pet_visits(id),
     CONSTRAINT fk_vsd_service FOREIGN KEY (service_id) REFERENCES services(id),
-    CONSTRAINT chk_vsd_quantity CHECK (quantity > 0),
-    CONSTRAINT chk_vsd_skip CHECK (skip_count >= 0)
+    CONSTRAINT chk_vsd_quantity CHECK (quantity > 0)
 );
 CREATE INDEX idx_vsd_visit ON visit_service_details(visit_id);
 CREATE INDEX idx_vsd_queue ON visit_service_details(status, queue_order); -- Hàng đợi phòng XN / CĐHA
 
 -- 15. VISIT_SERVICE_DETAIL_HISTORIES (AUDIT TRAIL TIẾN ĐỘ DỊCH VỤ)
--- Mỗi lần "Đẩy lùi 1 bậc" ghi 1 dòng action = 'SKIPPED' (số lần lấy từ visit_service_details.skip_count).
+-- "Gọi" / "Gọi lại" không ghi lịch sử vì không đổi trạng thái hay thứ tự; chỉ cập nhật visit_service_details.last_called_at.
 CREATE TABLE IF NOT EXISTS visit_service_detail_histories (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     visit_service_detail_id BIGINT NOT NULL,
     from_status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NULL,
     to_status ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL,
-    action VARCHAR(50) NOT NULL, -- ORDERED, START_PROCESSING, SAMPLE_COLLECTED, COMPLETED, CANCELLED, SKIPPED (đẩy lùi 1 bậc)
+    action VARCHAR(50) NOT NULL, -- ORDERED, START_PROCESSING, SAMPLE_COLLECTED, COMPLETED, CANCELLED
     changed_by_user_id BIGINT NOT NULL, -- LFK: auth.users
     reason TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

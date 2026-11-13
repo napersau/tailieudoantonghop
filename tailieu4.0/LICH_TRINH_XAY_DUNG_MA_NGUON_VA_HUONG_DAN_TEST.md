@@ -321,7 +321,7 @@
   - Trong giao dịch: tạo `pet_visits` (`WAITING`, `checked_in_at`, `receptionist_id`, `is_emergency`), ghi lịch sử `NULL → WAITING`.
   - Sau commit: phát `VisitCheckedInEvent`. `appointment-service` (consumer, idempotent) chuyển lịch `CONFIRMED → CHECKED_IN` và ghi lịch sử. **Không** gọi Feign để ghi sang `appointment-service`.
 - [ ] **3.2.2** Khách vãng lai (EX-02) dùng cùng endpoint với `appointmentId = null`. Khách đến sau khi lịch đã `NO_SHOW` cũng tiếp nhận như vãng lai (FR-18).
-- [ ] **3.2.3** API Hàng đợi (FR-21, EX-04): `GET /api/v1/clinical/pet-visits/queue` (Lễ tân) trả **danh sách chờ phân công** và **hàng đợi của từng Bác sĩ** (kèm `waitingCount`, `suggestedDoctorId` = Bác sĩ ít người chờ nhất); `GET /api/v1/clinical/pet-visits/my-queue` (Bác sĩ) trả hàng đợi của chính mình. Thứ tự `ORDER BY (is_emergency AND skip_count = 0) DESC, queue_order ASC`. Check-in gán `queue_order = QueueOrders.now()` và nhận `doctorId` tùy chọn để xếp ngay vào hàng đợi Bác sĩ.
+- [ ] **3.2.3** API Hàng đợi (FR-21, EX-04): `GET /api/v1/clinical/pet-visits/queue` (Lễ tân) trả **danh sách chờ phân công** và **hàng đợi của từng Bác sĩ** (kèm `waitingCount`, `suggestedDoctorId` = Bác sĩ ít người chờ nhất); `GET /api/v1/clinical/pet-visits/my-queue` (Bác sĩ) trả hàng đợi của chính mình. Thứ tự `ORDER BY is_emergency DESC, queue_order ASC`. Check-in gán `queue_order = QueueOrders.now()` và nhận `doctorId` tùy chọn để xếp ngay vào hàng đợi Bác sĩ.
 - [ ] **3.2.4** API Hủy tiếp nhận (`POST /api/v1/clinical/pet-visits/{id}/cancel`, body `{"reason": "..."}`, EX-03): `WAITING → CANCELLED`, **lý do ghi vào `pet_visit_status_histories.notes`** (không có cột `cancel_reason`).
 - [ ] **3.2.5** Consumer `VisitCheckedInEvent` trong `appointment-service`: idempotent, retry 3 lần rồi vào DLQ.
 
@@ -340,14 +340,14 @@
 
 ---
 
-### Task 3.3: Xếp ca vào Hàng đợi Bác sĩ, Gọi số, Đẩy lùi 1 bậc & Bắt đầu Khám Giai đoạn 1
+### Task 3.3: Xếp ca vào Hàng đợi Bác sĩ, Gọi số theo từng dòng & Bắt đầu Khám Giai đoạn 1
 - **Người thực hiện:** Lưu Minh Hiển (Phụ trách FR-22, FR-24, FR-25, FR-27, FR-28, FR-29, FR-47, UC-21, UC-22, EX-05, EX-10)
-- **Mục tiêu:** Lễ tân xếp ca vào hàng đợi riêng của Bác sĩ bất kỳ (không cần Bác sĩ rảnh); Bác sĩ gọi số, đẩy lùi 1 bậc khi vắng mặt, bắt đầu khám (T02), hệ thống tự tạo dịch vụ khám + hóa đơn dịch vụ.
+- **Mục tiêu:** Lễ tân xếp ca vào hàng đợi riêng của Bác sĩ bất kỳ (không cần Bác sĩ rảnh); Bác sĩ gọi số (ca bất kỳ; khách vắng thì gọi ca khác, thứ tự không đổi), bắt đầu khám (T02), hệ thống tự tạo dịch vụ khám + hóa đơn dịch vụ.
 - [ ] **3.3.1** Truy vấn trạng thái Bác sĩ (`GET /api/v1/clinical/doctors/status`) theo State Machine mục 3.3: `BUSY` nếu có ca `IN_PROGRESS`, ngược lại `AVAILABLE`; kèm `waitingCount` (số ca `WAITING` / `RESULTS_READY` trong hàng đợi). Danh sách Bác sĩ, tên, phòng lấy qua Feign `auth-service`.
 - [ ] **3.3.2** **API Xếp ca vào hàng đợi Bác sĩ** (`POST /api/v1/clinical/pet-visits/{id}/assign-doctor`, body `{"doctorId": 2}`, chỉ `RECEPTIONIST`): ca phải `WAITING` (`version` chống trùng); Bác sĩ phải là `VETERINARIAN` `ACTIVE` (Feign); **không kiểm tra Bác sĩ rảnh**; gán `doctor_id`, giữ nguyên `queue_order`. Gọi lại với Bác sĩ khác = chuyển hàng đợi. Màn hình Bác sĩ thấy ca mới ở lần làm mới hàng đợi kế tiếp.
 - [ ] **3.3.2b** **API Gỡ phân công** (`POST /api/v1/clinical/pet-visits/{id}/unassign-doctor`, chỉ `RECEPTIONIST`, UC-21 Luồng 5c): ca phải `WAITING` và đã có `doctor_id`; đặt `doctor_id = NULL`, ca về danh sách chờ phân công, giữ `queue_order`. Trạng thái không đổi nên không ghi `pet_visit_status_histories`.
-- [ ] **3.3.2c** **API Gọi số tiếp theo** (`POST /api/v1/clinical/pet-visits/call-next`, chỉ `VETERINARIAN`, Quy chuẩn 11.2 mục 6b): Bác sĩ không có ca `IN_PROGRESS` (`CLIN_1302`); chọn ca đầu `my-queue` (`CLIN_1303` nếu trống); phát `PatientCalledEvent`; ca chưa đổi trạng thái.
-- [ ] **3.3.2d** **API Đẩy lùi 1 bậc** (`POST /api/v1/clinical/pet-visits/{id}/skip`, chỉ `VETERINARIAN`, EX-10, FR-47): áp dụng cho ca `WAITING` / `RESULTS_READY` trong hàng đợi của Bác sĩ; `skip_count + 1`, ca đứng ngay sau người kế tiếp (Q4), gọi người kế tiếp. Không còn ai phía sau thì giữ nguyên.
+- [ ] **3.3.2c** **API Gọi số** (chỉ `VETERINARIAN`, Quy chuẩn 11.2 mục 6b): `POST /api/v1/clinical/pet-visits/{id}/call` gọi một ca **bất kỳ** trong hàng đợi của mình (`CLIN_1311` nếu ca không thuộc Bác sĩ này; chỉ ca `WAITING` / `RESULTS_READY`); `POST /api/v1/clinical/pet-visits/call-next` là phím tắt gọi ca đầu `my-queue` (`CLIN_1303` nếu trống). Cả hai: Bác sĩ không có ca `IN_PROGRESS` (`CLIN_1302`); ghi `last_called_at = NOW()` (nhãn "Đã gọi HH:mm") và phát `PatientCalledEvent` (`action = CALLED`), **không đổi trạng thái, không đổi `queue_order`**.
+- [x] **3.3.2d** *(Đã bỏ 13/11/2026)* API Đẩy lùi 1 bậc (`POST /api/v1/clinical/pet-visits/{id}/skip`) cùng cột `skip_count`, hành động `SKIPPED` và sự kiện `PUSHED_BACK` đã bị xóa: "Đẩy lùi 1 bậc" làm hai ca đầu hàng đổi chỗ cho nhau mãi mãi và làm ca cấp cứu mất ưu tiên. Thay bằng gọi ca khác (3.3.2c).
 - [ ] **3.3.3** API Bắt đầu khám (`POST /api/v1/clinical/pet-visits/{id}/start-exam`, Quy chuẩn 11.2): chỉ Bác sĩ được gán (`CLIN_1311`), không có ca `IN_PROGRESS` khác; `WAITING → IN_PROGRESS` + lịch sử (thời điểm bắt đầu = `created_at` của dòng lịch sử, **không có cột `started_at`**); tự tạo `visit_service_details` dịch vụ khám `EXAM_GEN` (`IN_PROGRESS`) và **1 `service_invoices` `PENDING`** (snapshot `unit_price = 100000.00`, `vat_rate = 0.00`). Sinh hiệu có thể gửi kèm hoặc cập nhật sau.
 - [ ] **3.3.4** API cập nhật sinh hiệu & ghi chú (`PUT /api/v1/clinical/pet-visits/{id}/clinical-info`): `weight_at_visit`, `temperature`, `clinical_notes`; API lịch sử bệnh án thú cưng (`GET /api/v1/pets/{id}/medical-history`, FR-28).
 
@@ -359,12 +359,12 @@
 >    ```
 >    **Kỳ vọng:** `200 OK`; ca vẫn `WAITING`; `GET /doctors/status`: Bác sĩ 2 `AVAILABLE`, `waitingCount = 1`.
 > 2. Xếp tiếp ca #2 (chó Milo, check-in ở Task 3.2 bước 4) vào hàng đợi Bác sĩ 2 → `200 OK` (**không bị chặn**); `GET /pet-visits/my-queue` (token Bác sĩ 2) trả `[#1, #2]`.
-> 2b. Gọi số và đẩy lùi:
+> 2b. Gọi số, khách vắng thì gọi ca khác:
 >    ```bash
->    curl -X POST http://localhost:8080/api/v1/clinical/pet-visits/call-next -H "Authorization: Bearer $TOKEN_VET"   # gọi ca #1
->    curl -X POST http://localhost:8080/api/v1/clinical/pet-visits/1/skip -H "Authorization: Bearer $TOKEN_VET"      # #1 vắng mặt
+>    curl -X POST http://localhost:8080/api/v1/clinical/pet-visits/call-next -H "Authorization: Bearer $TOKEN_VET"   # gọi ca #1 (đầu hàng)
+>    curl -X POST http://localhost:8080/api/v1/clinical/pet-visits/2/call -H "Authorization: Bearer $TOKEN_VET"      # #1 vắng mặt: gọi thẳng ca #2
 >    ```
->    **Kỳ vọng:** lệnh `skip` trả ca #2 (người được gọi tiếp); `my-queue` = `[#2, #1]`, ca #1 `skipCount = 1`. Đẩy lùi ca #2 một lần để trả lại thứ tự `[#1, #2]` cho các bước sau. Gọi `call-next` khi Bác sĩ đang có ca `IN_PROGRESS` → `409 CLIN_1302`.
+>    **Kỳ vọng:** cả hai lệnh `200 OK`; `my-queue` vẫn `[#1, #2]`, cả hai ca vẫn `WAITING`, cả hai có `lastCalledAt` (nhãn "Đã gọi"); mỗi lệnh phát một `PatientCalledEvent` `CALLED`. Gọi lại ca #1 (`…/1/call`) khi khách quay lại → `200 OK`, thứ tự không đổi. Gọi khi Bác sĩ đang có ca `IN_PROGRESS` → `409 CLIN_1302`; gọi ca của Bác sĩ khác → `403 CLIN_1311`.
 > 3. Bác sĩ Tiến bắt đầu khám:
 >    ```bash
 >    curl -X POST http://localhost:8080/api/v1/clinical/pet-visits/1/start-exam \
@@ -402,11 +402,11 @@
 
 ---
 
-### Task 3.5: Phòng Xét nghiệm – Gọi số, Đẩy lùi 1 bậc, Lấy mẫu & Nhập Kết quả
+### Task 3.5: Phòng Xét nghiệm – Gọi số theo từng dòng, Lấy mẫu & Nhập Kết quả
 - **Người thực hiện:** Nguyễn Đức Khởi (Phụ trách FR-35, FR-37, FR-38, FR-39, FR-40, FR-41, UC-25, BR-23, BR-24, BR-34, EX-06, EX-07)
 - **Mục tiêu:** KTV Lab gọi số, lấy mẫu, nhập chỉ số; hệ thống lưu khoảng tham chiếu snapshot. Nhãn `LOW / NORMAL / HIGH` **tính khi hiển thị**, không lưu.
-- [ ] **3.5.1** API Hàng đợi Lab: `GET /api/v1/clinical/lab-queue` (dịch vụ `LABORATORY` `PENDING`, tự vào hàng đợi khi chỉ định; `ORDER BY (is_emergency AND skip_count = 0) DESC, queue_order ASC`, chỉ mục `idx_vsd_queue`).
-- [ ] **3.5.2** API thao tác dịch vụ: `POST /api/v1/clinical/lab-queue/call-next` và `/imaging-queue/call-next` (chọn dịch vụ đầu hàng đợi phòng, phát `PatientCalledEvent`, giữ `PENDING`), `POST /api/v1/clinical/service-details/{id}/skip` (Đẩy lùi 1 bậc, EX-06: `skip_count + 1`, đổi `queue_order`, `action = SKIPPED`, gọi người kế tiếp), `/start` (`PENDING → IN_PROGRESS`, `action = START_PROCESSING`), `/sample-collected` (`action = SAMPLE_COLLECTED`, giữ `IN_PROGRESS`). Khách quay lại sau khi bị lùi (EX-07) không cần API riêng.
+- [ ] **3.5.1** API Hàng đợi Lab: `GET /api/v1/clinical/lab-queue` (dịch vụ `LABORATORY` `PENDING`, tự vào hàng đợi khi chỉ định; `ORDER BY is_emergency DESC, queue_order ASC`, chỉ mục `idx_vsd_queue`).
+- [ ] **3.5.2** API thao tác dịch vụ: `POST /api/v1/clinical/service-details/{id}/call` (gọi một ca bất kỳ trong hàng đợi phòng mình; ghi `last_called_at` cho mọi dịch vụ `PENDING` của ca, phát `PatientCalledEvent`, giữ `PENDING`, không đổi `queue_order`), `POST /api/v1/clinical/lab-queue/call-next` và `/imaging-queue/call-next` (phím tắt gọi ca đứng đầu), `/start` (`PENDING → IN_PROGRESS`, `action = START_PROCESSING`), `/sample-collected` (`action = SAMPLE_COLLECTED`, giữ `IN_PROGRESS`). Các dịch vụ `PENDING` của **cùng một đợt khám trong cùng phòng** gộp thành một ca ở giao diện (gọi một lần, "Bắt đầu" cả ca). Khách vắng thì gọi ca khác, khách quay lại thì gọi lại (EX-06, EX-07), không cần API riêng. *(API `/service-details/{id}/skip` — Đẩy lùi 1 bậc — đã bị xóa.)*
 - [ ] **3.5.3** API Nhập kết quả (`POST /api/v1/clinical/lab-results/{detailId}`), body `{"results": [{"labTestItemId": 2, "resultValue": 4.20}, …]}`:
   - Phải nhập đủ các chỉ số thuộc gói (`service_lab_test_items`).
   - Lưu `lab_test_results` (`result_value`, `min_value_snapshot`, `max_value_snapshot` theo loài của thú cưng, `performed_by`).
@@ -461,7 +461,7 @@
 - **Mục tiêu:** Khi mọi dịch vụ cận lâm sàng của ca đã `COMPLETED` hoặc `CANCELLED`, chuyển ca `RESULTS_READY` (T06) và đưa ca lên đầu hàng đợi của Bác sĩ khám chính.
 - [ ] **3.7.1** Sau mỗi lần lưu kết quả / hủy dịch vụ: nếu không còn dịch vụ `LABORATORY` / `IMAGING` nào `PENDING` hoặc `IN_PROGRESS` → `pet_visits.status = RESULTS_READY`, lịch sử `changed_by_user_id = NULL`.
 - [ ] **3.7.2** Phát `ParaclinicalResultsReadyEvent` (routing key `visit.results_ready`) sau commit.
-- [ ] **3.7.3** Đặt `queue_order = findMinQueueOrder(doctorId) − 1`, `skip_count = 0` trong cùng giao dịch T06: ca đứng đầu hàng đợi Bác sĩ, chỉ sau ca cấp cứu (FR-23). Lễ tân vẫn xếp ca mới vào hàng đợi Bác sĩ này bình thường.
+- [ ] **3.7.3** Đặt `queue_order = findMinQueueOrder(doctorId) − 1` trong cùng giao dịch T06: ca đứng đầu hàng đợi Bác sĩ, chỉ sau ca cấp cứu (FR-23). Lễ tân vẫn xếp ca mới vào hàng đợi Bác sĩ này bình thường.
 
 > **Hướng dẫn Kiểm thử Task 3.7:**
 > 1. Sau Task 3.5 và 3.6: `SELECT status FROM pet_clinic_clinical_db.pet_visits WHERE id = 1;` → `RESULTS_READY`.
@@ -474,7 +474,7 @@
 - **Người thực hiện:** Lưu Minh Hiển (Phụ trách FR-45, FR-46, FR-48, FR-49, FR-50, FR-54, UC-30, UC-33, EX-11, EX-12)
 - **Mục tiêu:** Bác sĩ đón ca có kết quả, chẩn đoán, chốt ca (`WAITING_PAYMENT`); xử lý khách vắng / bỏ về và mở lại hồ sơ.
 - [ ] **3.8.1** API Bắt đầu Giai đoạn 2 (`POST /api/v1/clinical/pet-visits/{id}/start-phase2`, T07): Bác sĩ gọi ca bằng `call-next` (Task 3.3.2c, ca có kết quả đứng đầu); khi thú cưng vào phòng gọi API này: ca `RESULTS_READY` thuộc hàng đợi của Bác sĩ, Bác sĩ không có ca `IN_PROGRESS` (`CLIN_1302`); → `IN_PROGRESS` + lịch sử.
-- [ ] **3.8.2** Khách vắng mặt khi gọi ca có kết quả (EX-10): dùng chung API `skip` (Task 3.3.2d); ca giữ `RESULTS_READY`. Không còn API `postpone-callback` và tab "ca đã hoãn" (bỏ T13).
+- [ ] **3.8.2** Khách vắng mặt khi gọi ca có kết quả (EX-10): Bác sĩ gọi ca khác bằng `POST …/pet-visits/{id}/call` (Task 3.3.2c), khách quay lại thì `call` lại ca đó; ca giữ `RESULTS_READY` và vị trí đầu hàng. Không còn API `postpone-callback` và tab "ca đã hoãn" (bỏ T13).
 - [ ] **3.8.3** API Đóng ca / Khách bỏ về (`POST /api/v1/clinical/pet-visits/{id}/abandon`, T08 / T12, EX-11, FR-45, FR-48): áp dụng cho `RESULTS_READY` hoặc `WAITING_RESULTS` (không có dịch vụ đang `IN_PROGRESS`); dịch vụ còn `PENDING` → `CANCELLED` kèm hóa đơn; **không tạo hóa đơn mới** – hóa đơn của dịch vụ đã làm giữ `PENDING` làm công nợ; ca → `COMPLETED`.
 - [ ] **3.8.4** API Chốt đợt khám (`POST /api/v1/clinical/pet-visits/{id}/close-visit`, T05 / T09): body `{diagnosis, treatmentPlan, doctorAdvice}`; chặn khi thiếu chẩn đoán (`CLIN_1307`, EX-12) hoặc còn dịch vụ tại phòng chưa xử lý (`CLIN_1309`); → `WAITING_PAYMENT` + lịch sử (**không có cột `closed_at`**); không lập thêm hóa đơn; không phát sự kiện sang billing.
 - [ ] **3.8.5** API Mở lại hồ sơ (`POST /api/v1/clinical/pet-visits/{id}/reopen`, T14): Bác sĩ phụ trách hoặc ADMIN, lý do bắt buộc; `WAITING_PAYMENT → IN_PROGRESS`.
@@ -491,7 +491,7 @@
 >           "doctorAdvice": "Theo dõi phân; nếu tiếp tục nôn phải tái khám ngay"}'
 >    ```
 > 4. **Kết quả kỳ vọng:** `200 OK`, `status: "WAITING_PAYMENT"`; mọi API sửa chuyên môn trên ca #1 trả `400 CLIN_1305`; `service_invoices` vẫn 3 dòng `PENDING`.
-> 5. EX-10: với một ca `RESULTS_READY` khác, `call-next` rồi `skip` → ca vẫn `RESULTS_READY`, đứng sau người kế tiếp; Bác sĩ vẫn `AVAILABLE`.
+> 5. EX-10: với một ca `RESULTS_READY` khác, `call-next` rồi `…/{id}/call` ở ca khác → ca vắng vẫn `RESULTS_READY` và giữ nguyên vị trí (đứng đầu); Bác sĩ vẫn `AVAILABLE`.
 
 ---
 
@@ -644,9 +644,9 @@
 - **Người thực hiện:** Vũ Hồng Linh
 - **Mục tiêu:** Hiện thực hóa bản vẽ Figma, gắn API Backend qua Gateway :8080.
 - [ ] **5.3.1** Cổng Đặt lịch (Customer Portal): chọn ngày → tải khung giờ trống → chọn thú cưng → nhập triệu chứng → nhận mã hẹn.
-- [ ] **5.3.2** Tiếp đón Lễ tân: lịch hẹn trong ngày, nút Check-in một chạm (chọn Bác sĩ theo gợi ý), tiếp nhận vãng lai, **bảng điều phối**: danh sách chờ phân công + một cột hàng đợi cho mỗi Bác sĩ (trạng thái, số người chờ, số lần bị lùi), nút Xếp / Chuyển / Gỡ phân công luôn dùng được.
-- [ ] **5.3.3** Bệnh án Bác sĩ 2 Pha: GĐ 1 (sinh hiệu, ghi chú, dịch vụ tại phòng, chỉ định CLS) → kết quả Lab / CĐHA tô màu Vàng / Xanh / Đỏ → đơn thuốc (cảnh báo tồn kho) → chốt ca; màn hình hàng đợi của Bác sĩ với nút "Gọi số tiếp theo" / "Đẩy lùi 1 bậc"; nút mở lại hồ sơ.
-- [ ] **5.3.4** Hàng đợi Cận lâm sàng: "Gọi số tiếp theo", "Đẩy lùi 1 bậc" (hiển thị số lần bị lùi), bắt đầu, "Đã lấy mẫu", form nhập chỉ số theo gói, form CĐHA multipart, huy hiệu liên phòng.
+- [ ] **5.3.2** Tiếp đón Lễ tân: lịch hẹn trong ngày, nút Check-in một chạm (chọn Bác sĩ theo gợi ý), tiếp nhận vãng lai, **bảng điều phối**: danh sách chờ phân công + một cột hàng đợi cho mỗi Bác sĩ (trạng thái, số người chờ, ca cấp cứu), nút Xếp / Chuyển / Gỡ phân công luôn dùng được.
+- [ ] **5.3.3** Bệnh án Bác sĩ 2 Pha: GĐ 1 (sinh hiệu, ghi chú, dịch vụ tại phòng, chỉ định CLS) → kết quả Lab / CĐHA tô màu Vàng / Xanh / Đỏ → đơn thuốc (cảnh báo tồn kho) → chốt ca; màn hình hàng đợi của Bác sĩ với nút "Gọi" / "Bắt đầu khám" trên từng ca (phím tắt "Gọi số tiếp theo"); nút mở lại hồ sơ.
+- [ ] **5.3.4** Hàng đợi Cận lâm sàng: nút "Gọi" / "Gọi lại" trên từng ca (phím tắt "Gọi số tiếp theo"), bắt đầu cả ca, "Đã lấy mẫu", form nhập chỉ số theo gói, form CĐHA multipart, huy hiệu liên phòng.
 - [ ] **5.3.5** Thu ngân: bảng kê hóa đơn dịch vụ (giảm giá từng hóa đơn, xác nhận thanh toán, in phiếu thu, thu công nợ) và màn hình **Bán thuốc theo đơn** (chọn thuốc / số lượng khách mua, hóa đơn thuốc, xác nhận thanh toán & xuất thuốc, in đơn cho khách mua ngoài).
 
 > **Hướng dẫn Kiểm thử Task 5.3:**
@@ -680,13 +680,13 @@
 - [ ] **5.5.1 [EX-01]** Lịch `CONFIRMED` quá `start_time + 30'` chưa check-in → tự chuyển `NO_SHOW`, lịch sử `changed_by_user_id = NULL`, khung giờ được giải phóng.
 - [ ] **5.5.2 [EX-02]** Khách vãng lai → check-in với `appointmentId = null`, ca `WAITING`.
 - [ ] **5.5.3 [EX-03]** Khách bỏ về khi đang chờ → `CANCELLED`, lý do trong `pet_visit_status_histories.notes`; ca rời khỏi hàng đợi Bác sĩ, người phía sau lên một bậc.
-- [ ] **5.5.4 [EX-04]** Ca cấp cứu → `is_emergency = true`, lên đầu danh sách chờ phân công, đầu hàng đợi Bác sĩ và hàng đợi Lab / CĐHA; đẩy lùi một lần thì xếp như ca thường.
+- [ ] **5.5.4 [EX-04]** Ca cấp cứu → `is_emergency = true`, lên đầu danh sách chờ phân công, đầu hàng đợi Bác sĩ và hàng đợi Lab / CĐHA; gọi ca khác khi khách vắng thì ca cấp cứu vẫn giữ ưu tiên và cảnh báo đỏ.
 - [ ] **5.5.5 [EX-05]** Xếp ca mới vào hàng đợi Bác sĩ đang có ca vừa có kết quả → `200 OK`, ca có kết quả vẫn đứng đầu và được gọi trước.
-- [ ] **5.5.6 [EX-06]** Vắng mặt khi gọi vào Lab / CĐHA → `skip`, dịch vụ giữ `PENDING`, `action = SKIPPED`, đứng sau người kế tiếp, thông báo ứng dụng (không SMS).
-- [ ] **5.5.7 [EX-07]** Khách quay lại sau khi bị lùi → không cần thao tác; đến lượt `call-next` gọi đúng dịch vụ đó, sau đó `start` → `IN_PROGRESS`.
+- [ ] **5.5.6 [EX-06]** Vắng mặt khi gọi vào Lab / CĐHA → KTV bấm `…/service-details/{id}/call` ở ca khác; dịch vụ ca vắng giữ `PENDING` và giữ nguyên vị trí (không đổi `queue_order`, không ghi lịch sử), thông báo ứng dụng (không SMS).
+- [ ] **5.5.7 [EX-07]** Khách quay lại sau khi vắng → KTV bấm `call` lại ở đúng ca đó, sau đó `start` → `IN_PROGRESS`.
 - [ ] **5.5.8 [EX-08]** Hủy 1 dịch vụ CLS → dịch vụ và **hóa đơn của nó `CANCELLED`**; dịch vụ còn lại xong → ca `RESULTS_READY`.
-- [ ] **5.5.9 [EX-09]** CĐHA gọi khi Lab chưa bấm "Đã lấy mẫu" → huy hiệu `SAMPLING`; CĐHA `skip`, gọi người kế tiếp.
-- [ ] **5.5.10 [EX-10]** Bác sĩ gọi số (ca `WAITING` hoặc `RESULTS_READY`) nhưng khách vắng → `skip`, ca giữ trạng thái, đứng sau người kế tiếp, Bác sĩ vẫn `AVAILABLE`.
+- [ ] **5.5.9 [EX-09]** CĐHA gọi khi Lab chưa bấm "Đã lấy mẫu" → huy hiệu `SAMPLING`; CĐHA `call` ca khác, thú cưng sang thì `call` lại.
+- [ ] **5.5.10 [EX-10]** Bác sĩ gọi số (ca `WAITING` hoặc `RESULTS_READY`) nhưng khách vắng → `…/pet-visits/{id}/call` ở ca khác, ca vắng giữ trạng thái và vị trí, Bác sĩ vẫn `AVAILABLE`.
 - [ ] **5.5.11 [EX-11]** Khách bỏ về (ở `WAITING_RESULTS` hoặc `RESULTS_READY`) → `abandon`: dịch vụ chưa làm hủy kèm hóa đơn, hóa đơn dịch vụ đã làm giữ `PENDING` (công nợ), ca `COMPLETED`; lần sau thu được qua Task 3.9.
 - [ ] **5.5.12 [EX-12]** Chốt ca khi thiếu chẩn đoán → `400 CLIN_1307`.
 - [ ] **5.5.13 [EX-13]** Kê vượt tồn kho → lưu đơn thành công kèm `stockWarnings` (không chặn).
@@ -708,8 +708,8 @@
 | **T1.4 - T1.5** | Service Registry (Eureka :8761) & API Gateway (:8080, trả 401) | Khởi | NFR-02, NFR-03 | `[ ] Chưa xong` |
 | **T2.1 - T2.4** | `auth-service` (:8081): BCrypt, JWT, Refresh Token Rotation, nhân sự & phòng | Khởi | FR-01, FR-02, FR-09, NFR-02, NFR-03 | `[ ] Chưa xong` |
 | **T2.5 - T2.8** | `appointment-service` (:8082): Slot động, Đặt / duyệt / hủy lịch, No-Show | Hiển | FR-12 → FR-17, EX-01 | `[ ] Chưa xong` |
-| **T3.1 - T3.3** | `clinical-service` (:8083): Danh mục, Thú cưng, Check-in, Hàng đợi riêng từng Bác sĩ (xếp ca, gọi số, đẩy lùi), Bắt đầu khám | Khởi, Hiển | FR-03, FR-05 → FR-08, FR-10, FR-11, FR-18 → FR-29, EX-02 → EX-05 | `[ ] Chưa xong` |
-| **T3.4 - T3.8** | `clinical-service`: Chỉ định + hóa đơn dịch vụ, CLS song song (gọi số, đẩy lùi), GĐ 2 | Hiển, Khởi | FR-30 → FR-50, FR-54, EX-06 → EX-12 | `[ ] Chưa xong` |
+| **T3.1 - T3.3** | `clinical-service` (:8083): Danh mục, Thú cưng, Check-in, Hàng đợi riêng từng Bác sĩ (xếp ca, gọi theo từng dòng), Bắt đầu khám | Khởi, Hiển | FR-03, FR-05 → FR-08, FR-10, FR-11, FR-18 → FR-29, EX-02 → EX-05 | `[ ] Chưa xong` |
+| **T3.4 - T3.8** | `clinical-service`: Chỉ định + hóa đơn dịch vụ, CLS song song (gọi theo từng dòng, gộp ca), GĐ 2 | Hiển, Khởi | FR-30 → FR-50, FR-54, EX-06 → EX-12 | `[ ] Chưa xong` |
 | **T3.9** | `clinical-service`: Thu tiền hóa đơn dịch vụ & hoàn tất ca khám | Hiển | FR-55 → FR-60, EX-11, EX-14 | `[ ] Chưa xong` |
 | **T4.1 - T4.4** | `billing-pharmacy-service` (:8084): Kê đơn, Hóa đơn thuốc, Trừ kho nguyên tử, Nhập kho | Hiển | FR-04, FR-51 → FR-53, FR-61 → FR-66, EX-13 → EX-16 | `[ ] Chưa xong` |
 | **T5.1** | `notification-service` (:8085): WebSocket STOMP & Email theo 9 sự kiện | Khởi | Thông báo cho FR-12 → FR-60 | `[ ] Chưa xong` |
@@ -756,3 +756,5 @@
 | 3.4.5, 3.9.3, 4.2.1 (rà soát 10/11) | Hủy ca không xét dịch vụ tại phòng; mã lỗi hóa đơn hủy; sửa đơn sau mở lại | Guard T11; `BILL_1401` / `BILL_1408`; chặn sửa đơn khi có hóa đơn thuốc chưa hủy | Đồng bộ State Machine và Quy chuẩn |
 | 4.3.4 (mới), 4.4, 5.5.15 (rà soát 10/11) | Không có API sửa hóa đơn thuốc; test EX-15 sửa trực tiếp `stock_quantity` | Thêm `PUT …/medicine-invoices/{id}/items`; test dùng `ADJUSTMENT` rồi sửa hóa đơn và xác nhận lại | EX-15 thực hiện được; giữ bất biến kho |
 | 3.2, 3.3, 3.5, 3.7, 3.8, 5.1, 5.3, 5.4, 5.5 (rà soát 11/11) | Hàng đợi sảnh chung; phân công chỉ cho Bác sĩ `AVAILABLE` (`CLIN_1302` / `CLIN_1303`); CLS `postpone` / `recall`; GĐ 2 `call-in`, `postpone-callback`; Khóa ưu tiên | `GET …/queue` (danh sách chờ + hàng đợi từng Bác sĩ), `…/my-queue`; `assign-doctor` không kiểm tra Bác sĩ rảnh; thêm `call-next`, `skip` (Bác sĩ) và `lab-queue/call-next`, `imaging-queue/call-next`, `service-details/{id}/skip`; `start-phase2`; test 3.3, 3.7, 3.8 và EX-03 → EX-10 viết lại | Mô hình hàng đợi riêng từng Bác sĩ + Đẩy lùi 1 bậc |
+| 3.3, 3.5, 5.3, 5.5 (cập nhật 13/11) | `call-next` + `skip` (Đẩy lùi 1 bậc, xếp sau người kế tiếp, `skip_count + 1`, `action = SKIPPED`); test 2b `skip` rồi "đẩy lùi ca #2 để trả lại thứ tự"; EX-04, EX-06, EX-07, EX-09, EX-10 dùng `skip` | Thêm `POST …/pet-visits/{id}/call` và `…/service-details/{id}/call` (gọi ca bất kỳ, không đổi thứ tự/trạng thái); `call-next` giữ làm phím tắt; đã xóa API `skip` và cột `skip_count`; CLS gộp dịch vụ cùng đợt khám, cùng phòng thành một ca; test 2b và EX-04/06/07/09/10 viết lại | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi (ca thứ 3, 4 không được gọi) và làm ca cấp cứu mất ưu tiên |
+| 3.3.2c, 3.5.2, 3.8.2 (rà soát 13/11) | `call` chỉ phát sự kiện; 3.8.2 còn dùng API `skip` đã xóa | `call` ghi `last_called_at`; test 2b kiểm tra `lastCalledAt`; 3.8.2 dùng `call` | Lưu ca đã được gọi; bỏ tham chiếu API đã xóa |

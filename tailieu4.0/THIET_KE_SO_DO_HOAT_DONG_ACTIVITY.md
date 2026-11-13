@@ -45,7 +45,7 @@ Hệ thống được thiết kế theo mô hình phân quyền của CSDL (`rol
 3. **Bác sĩ khám chính (`VETERINARIAN`):** Phụ trách ca khám tại phòng khám cố định: cân đo sinh hiệu và khám lâm sàng sơ bộ (GĐ 1), thực hiện các dịch vụ tại phòng (tiêm, tẩy giun, thủ thuật), chỉ định cận lâm sàng, đọc kết quả tổng hợp (GĐ 2), chẩn đoán xác định và kê đơn thuốc.
 4. **Kỹ thuật viên Xét nghiệm (`LAB_TECHNICIAN`):** Phụ trách phòng Xét nghiệm, lấy mẫu máu/bệnh phẩm, nạp máy phân tích, nhập kết quả các chỉ số thuộc gói xét nghiệm.
 5. **Kỹ thuật viên / Bác sĩ CĐHA (`IMAGING_TECHNICIAN`):** Phụ trách phòng Chẩn đoán hình ảnh, siêu âm, chụp X-quang, tải ảnh lên hệ thống và đưa ra kết luận hình thái học.
-6. **Hệ thống phần mềm (Automated System):** Tính trạng thái bác sĩ thời gian thực, sắp xếp hàng đợi riêng từng Bác sĩ và hàng đợi phòng CLS, thông báo gọi số, xử lý đẩy lùi 1 bậc, ghi lịch sử trạng thái và thực hiện giao dịch CSDL an toàn (`@Transactional`).
+6. **Hệ thống phần mềm (Automated System):** Tính trạng thái bác sĩ thời gian thực, sắp xếp hàng đợi riêng từng Bác sĩ và hàng đợi phòng CLS, thông báo gọi số theo từng dòng (không đổi thứ tự), ghi lịch sử trạng thái và thực hiện giao dịch CSDL an toàn (`@Transactional`).
 
 ### 1.3. Quy ước dữ liệu xuyên suốt các sơ đồ
 - **Mọi lần đổi trạng thái** của lịch hẹn, đợt khám, chỉ định dịch vụ đều ghi 1 dòng lịch sử tương ứng (`*_status_histories`, `visit_service_detail_histories`). Sơ đồ không vẽ lại bước này ở từng nút.
@@ -89,12 +89,12 @@ flowchart TD
     end
 
     subgraph LANE_DOCTOR["BÁC SĨ KHÁM CHÍNH (Veterinarian)"]
-        DOC_CALL_1["Bấm 'Gọi số tiếp theo'\n(vắng mặt → Đẩy lùi 1 bậc)"]
+        DOC_CALL_1["Bấm 'Gọi' ở một ca\n(vắng mặt → gọi ca khác)"]
         DOC_START_1["Bấm 'Bắt đầu khám' (GĐ 1)\nCân đo sinh hiệu, khám thực thể"]
         DOC_DECIDE{"Cần chỉ định\nCận lâm sàng?"}
         DOC_ORDER["Chọn dịch vụ Lab / CĐHA,\nbấm 'Chỉ định & Gửi phòng CLS'"]
         DOC_FAST_RX["Chẩn đoán, thực hiện dịch vụ tại phòng\n(tiêm, tẩy giun...), kê đơn nếu cần"]
-        DOC_CALL_G2["Bấm 'Gọi số tiếp theo' (ca có KQ đứng đầu),\nbấm 'Bắt đầu GĐ 2' khi thú cưng vào phòng"]
+        DOC_CALL_G2["Bấm 'Gọi' ở ca có KQ (đang đứng đầu),\nbấm 'Bắt đầu GĐ 2' khi thú cưng vào phòng"]
         DOC_CONSULT["Phân tích chỉ số máu, ảnh X-quang,\nchẩn đoán xác định & kê đơn thuốc"]
         DOC_CLOSE["Bấm 'Chốt đợt khám & Khóa bệnh án'"]
     end
@@ -159,7 +159,7 @@ flowchart TD
 ## 3. AD-02: TIẾP ĐÓN, XẾP HÀNG ĐỢI RIÊNG TỪNG BÁC SĨ & GỌI SỐ
 
 ### 3.1. Ý nghĩa & Bối cảnh nghiệp vụ
-Biểu diễn quy trình tiếp đón tại sảnh (UC-18, UC-19, UC-20, UC-21), xử lý hai nguồn khách hàng (Khách đặt lịch trước và Khách vãng lai Walk-in), việc Lễ tân **xếp ca vào hàng đợi riêng của từng Bác sĩ** và cách Bác sĩ **gọi số / đẩy lùi 1 bậc** trong hàng đợi của mình. Lễ tân không phải chờ Bác sĩ rảnh mới phân ca. Lễ tân **không cân đo sinh hiệu** tại quầy; việc này do Bác sĩ thực hiện trong phòng khám (AD-03).
+Biểu diễn quy trình tiếp đón tại sảnh (UC-18, UC-19, UC-20, UC-21), xử lý hai nguồn khách hàng (Khách đặt lịch trước và Khách vãng lai Walk-in), việc Lễ tân **xếp ca vào hàng đợi riêng của từng Bác sĩ** và cách Bác sĩ **gọi theo từng dòng** (khách vắng thì gọi ca khác) trong hàng đợi của mình. Lễ tân không phải chờ Bác sĩ rảnh mới phân ca. Lễ tân **không cân đo sinh hiệu** tại quầy; việc này do Bác sĩ thực hiện trong phòng khám (AD-03).
 
 ### 3.2. Sơ đồ Hoạt động Phân làn
 
@@ -185,8 +185,8 @@ flowchart TD
     end
 
     subgraph LANE_DOCTOR["BÁC SĨ (Veterinarian)"]
-        D_CALL["Không đang khám ca nào,\nbấm 'Gọi số tiếp theo'"]
-        D_SKIP["[EX-10] Gọi 2-3 lần không thấy,\nbấm 'Đẩy lùi 1 bậc'"]
+        D_CALL["Không đang khám ca nào,\nbấm 'Gọi' ở một ca\n(hoặc 'Gọi số tiếp theo')"]
+        D_SKIP["[EX-10] Gọi 2-3 lần không thấy,\nbấm 'Gọi' ca khác"]
         D_START["Bấm 'Bắt đầu khám' (sang AD-03)"]
     end
 
@@ -196,8 +196,8 @@ flowchart TD
         S_CREATE_VISIT["Tạo pet_visits: WAITING (T01)\nqueue_order = thời điểm tiếp nhận\nNếu có hẹn: phát VisitCheckedInEvent"]
         S_SUGGEST["Hiển thị số người đang chờ của từng Bác sĩ,\ngợi ý Bác sĩ ít người chờ nhất"]
         S_ASSIGN["Gán pet_visits.doctor_id (ca vẫn WAITING)\nCa vào hàng đợi của Bác sĩ theo queue_order\nIn phiếu số phòng + số thứ tự"]
-        S_PICK_HEAD["Chọn ca đầu hàng đợi của Bác sĩ:\nORDER BY (is_emergency AND skip_count = 0) DESC, queue_order\nPhát PatientCalledEvent (màn hình sảnh + ứng dụng)"]
-        S_SKIP["skip_count + 1; đổi queue_order để ca bị lùi\nđứng ngay sau người kế tiếp\n(sau nhóm cấp cứu nếu người kế tiếp là ca cấp cứu)"]
+        S_PICK_HEAD["Ca được chọn (mặc định: đầu hàng đợi\nORDER BY is_emergency DESC, queue_order)\nPhát PatientCalledEvent (màn hình sảnh + ứng dụng)\nGhi last_called_at (nhãn Đã gọi HH:mm)\nKhông đổi trạng thái và queue_order"]
+        S_SKIP["Ca vắng giữ nguyên vị trí (không đổi queue_order,\nkhông đếm lần vắng); ca cấp cứu giữ ưu tiên.\nKhách quay lại: Bác sĩ bấm 'Gọi lại'"]
     end
 
     C_ARRIVE --> C_PROVIDE --> R_SEARCH --> R_DECIDE_NEW
@@ -216,7 +216,7 @@ flowchart TD
     C_PRESENT -- "[Vắng mặt]" --> D_SKIP --> S_SKIP --> D_CALL
 ```
 
-> **Lưu ý:** Lễ tân xếp ca vào hàng đợi của bất kỳ Bác sĩ nào, kể cả Bác sĩ đang khám; trạng thái Bác sĩ chỉ chặn Bác sĩ gọi số khi đang khám dở (BR-12). Lễ tân có thể chuyển ca chưa bắt đầu khám sang hàng đợi Bác sĩ khác (giữ `queue_order`) hoặc gỡ về danh sách chờ phân công. Khách bỏ về khi đang chờ: Lễ tân hủy ca theo EX-03, ca rời khỏi hàng đợi. Không giới hạn số lần đẩy lùi; ca cấp cứu đã bị lùi được xếp như ca thường.
+> **Lưu ý:** Lễ tân xếp ca vào hàng đợi của bất kỳ Bác sĩ nào, kể cả Bác sĩ đang khám; trạng thái Bác sĩ chỉ chặn Bác sĩ gọi số khi đang khám dở (BR-12). Lễ tân có thể chuyển ca chưa bắt đầu khám sang hàng đợi Bác sĩ khác (giữ `queue_order`) hoặc gỡ về danh sách chờ phân công. Khách bỏ về khi đang chờ: Lễ tân hủy ca theo EX-03, ca rời khỏi hàng đợi. Ca vắng giữ nguyên vị trí và ca cấp cứu luôn giữ ưu tiên (từ 13/11/2026 không còn "Đẩy lùi 1 bậc").
 
 ---
 
@@ -296,7 +296,7 @@ flowchart TD
 ## 5. AD-04: THỰC HIỆN CẬN LÂM SÀNG SONG SONG & XỬ LÝ NGOẠI LỆ HÀNG ĐỢI
 
 ### 5.1. Ý nghĩa & Bối cảnh nghiệp vụ
-Mô tả tiến trình thực hiện song song tại 2 phòng độc lập: **Phòng Xét nghiệm (Lab)** và **Phòng Chẩn đoán hình ảnh (CĐHA)** (UC-25 & UC-26). Nhánh của phòng nào chỉ chạy khi ca có dịch vụ thuộc phòng đó. Dịch vụ **tự vào hàng đợi** phòng tương ứng ngay khi Bác sĩ chỉ định. Sơ đồ đặc tả Fork / Join, cơ chế "Gọi số tiếp theo" và các ngoại lệ: Khách vắng mặt khi gọi số → "Đẩy lùi 1 bậc" (EX-06; khách quay lại chỉ chờ tới lượt – EX-07), Khách xin hủy 1 dịch vụ (EX-08), CĐHA gọi số đúng lúc thú cưng đang lấy máu (EX-09).
+Mô tả tiến trình thực hiện song song tại 2 phòng độc lập: **Phòng Xét nghiệm (Lab)** và **Phòng Chẩn đoán hình ảnh (CĐHA)** (UC-25 & UC-26). Nhánh của phòng nào chỉ chạy khi ca có dịch vụ thuộc phòng đó. Dịch vụ **tự vào hàng đợi** phòng tương ứng ngay khi Bác sĩ chỉ định. Sơ đồ đặc tả Fork / Join, cơ chế "Gọi" theo từng dòng (các dịch vụ cùng đợt khám, cùng phòng gộp thành một ca) và các ngoại lệ: Khách vắng mặt khi gọi số → gọi ca khác, ca vắng giữ nguyên vị trí (EX-06; khách quay lại thì "Gọi lại" – EX-07), Khách xin hủy 1 dịch vụ (EX-08), CĐHA gọi số đúng lúc thú cưng đang lấy máu (EX-09).
 
 **Dữ liệu cho huy hiệu EX-09:** sau khi lấy mẫu, KTV Lab bấm *"Đã lấy mẫu"*; hệ thống ghi `action = SAMPLE_COLLECTED` vào `visit_service_detail_histories`. Huy hiệu *"Đang lấy máu bên phòng Lab"* chỉ hiện khi dịch vụ Lab của ca đang `IN_PROGRESS` **và** `action` mới nhất là `START_PROCESSING` (chưa lấy mẫu xong). Khi máy đang chạy (`SAMPLE_COLLECTED`), thú cưng đã tự do nên CĐHA gọi bình thường.
 
@@ -307,10 +307,10 @@ flowchart TD
     FORK_START((Bác sĩ gửi chỉ định)) --> SYS_FORK[["FORK: Phân luồng theo phòng có dịch vụ"]]
 
     subgraph LANE_LAB["PHÒNG XÉT NGHIỆM (Lab Room)"]
-        L_QUEUE["Hàng đợi Xét nghiệm (PENDING)\ncấp cứu chưa bị lùi trước, rồi queue_order"]
-        L_CALL["KTV bấm 'Gọi số tiếp theo'\n(gọi dịch vụ đứng đầu hàng đợi)"]
+        L_QUEUE["Hàng đợi Xét nghiệm (PENDING)\ncấp cứu trước, rồi queue_order\n(dịch vụ cùng đợt khám gộp một ca)"]
+        L_CALL["KTV bấm 'Gọi' ở một ca\n(hoặc 'Gọi số tiếp theo' gọi ca đứng đầu)"]
         L_DECIDE_PRESENT{"Khách có mặt\nsau 2-3 lần gọi?"}
-        L_POSTPONE["[EX-06] Bấm 'Đẩy lùi 1 bậc'\n(action = SKIPPED, xếp sau người kế tiếp)"]
+        L_POSTPONE["[EX-06] Bấm 'Gọi' ca khác\n(ca vắng giữ nguyên vị trí, không ghi lịch sử;\nmỗi lần gọi ghi last_called_at)"]
         L_START["Bấm 'Bắt đầu làm' (IN_PROGRESS, START_PROCESSING)\nLấy mẫu máu"]
         L_SAMPLED["Bấm 'Đã lấy mẫu' (SAMPLE_COLLECTED)\nThú cưng rời phòng Lab"]
         L_MACHINE["Máy huyết học / sinh hóa phân tích tự động"]
@@ -319,11 +319,11 @@ flowchart TD
     end
 
     subgraph LANE_IMAGING["PHÒNG CHẨN ĐOÁN HÌNH ẢNH (Imaging Room)"]
-        I_QUEUE["Hàng đợi CĐHA (PENDING)\ncấp cứu chưa bị lùi trước, rồi queue_order"]
-        I_CALL["KTV / Bác sĩ CĐHA bấm 'Gọi số tiếp theo'"]
+        I_QUEUE["Hàng đợi CĐHA (PENDING)\ncấp cứu trước, rồi queue_order\n(dịch vụ cùng đợt khám gộp một ca)"]
+        I_CALL["KTV / Bác sĩ CĐHA bấm 'Gọi' ở một ca\n(hoặc 'Gọi số tiếp theo')"]
         I_AT_LAB{"Thú cưng đang\nlấy mẫu ở phòng Lab?"}
         I_DECIDE_PRESENT{"Khách có mặt\nsau 2-3 lần gọi?"}
-        I_POSTPONE["[EX-06 / EX-09] Bấm 'Đẩy lùi 1 bậc'\n(action = SKIPPED, xếp sau người kế tiếp)"]
+        I_POSTPONE["[EX-06 / EX-09] Bấm 'Gọi' ca khác\n(ca vắng giữ nguyên vị trí, không ghi lịch sử)"]
         I_CAPTURE["Bấm 'Bắt đầu làm' (IN_PROGRESS)\nSiêu âm bụng / Chụp X-quang"]
         I_UPLOAD["Tải tệp ảnh lên hệ thống & nhập mô tả, kết luận"]
         I_CANCEL_ONE["[EX-08] Khách xin hủy siêu âm / X-quang"]
@@ -369,7 +369,7 @@ flowchart TD
 Mô tả quy trình Bác sĩ đón lại bệnh nhân sau khi có kết quả cận lâm sàng (UC-30, UC-31, UC-33). Ca có kết quả đã tự lên đầu hàng đợi của Bác sĩ (T06). Bác sĩ hội chẩn, chẩn đoán xác định, có thể thực hiện thêm dịch vụ tại phòng, kê đơn thuốc điện tử và khóa bệnh án.
 
 Hai điểm cần lưu ý:
-- **Gọi số trước, đổi trạng thái sau (EX-10):** "Gọi số tiếp theo" chỉ phát thông báo, ca vẫn `RESULTS_READY`; thú cưng vào phòng thì Bác sĩ mới bấm "Bắt đầu Giai đoạn 2" (T07). Gọi 2–3 lần không vào thì "Đẩy lùi 1 bậc": ca đứng sau người kế tiếp, Bác sĩ gọi người đó.
+- **Gọi số trước, đổi trạng thái sau (EX-10):** "Gọi" (hoặc "Gọi số tiếp theo") chỉ phát thông báo, ca vẫn `RESULTS_READY` và thứ tự không đổi; thú cưng vào phòng thì Bác sĩ mới bấm "Bắt đầu Giai đoạn 2" (T07). Gọi 2–3 lần không vào thì Bác sĩ bấm "Gọi" ca khác: ca vắng giữ nguyên vị trí (vẫn đứng đầu hàng đợi), khách quay lại thì "Gọi lại".
 - **Kê đơn không bị chặn bởi tồn kho (EX-13):** vì khách được mua thuốc ngoài, hệ thống chỉ cảnh báo khi số lượng kê vượt tồn kho; Bác sĩ quyết định giữ nguyên hay đổi thuốc.
 
 ### 6.2. Sơ đồ Hoạt động Phân làn
@@ -378,10 +378,10 @@ Hai điểm cần lưu ý:
 flowchart TD
     subgraph LANE_DOCTOR["BÁC SĨ KHÁM CHÍNH (Veterinarian)"]
         D_FINISH_PREV["Bác sĩ rời ca trước (chỉ định CLS / chốt ca)"]
-        D_SEE_POPUP["Bấm 'Gọi số tiếp theo'\n(ca có KQ đứng đầu hàng đợi)"]
+        D_SEE_POPUP["Bấm 'Gọi' ở ca có KQ\n(đứng đầu hàng đợi)"]
         D_DECIDE_PATIENT{"Khách có vào phòng\nsau 2-3 lần thông báo?"}
 
-        D_HOLD_G2["[EX-10] Bấm 'Đẩy lùi 1 bậc'"]
+        D_HOLD_G2["[EX-10] Bấm 'Gọi' ca khác"]
         D_START_G2["Bấm 'Bắt đầu Giai đoạn 2'"]
 
         D_ANALYZE["Phân tích kết quả tổng hợp:\n- Đối chiếu chỉ số bất thường (đỏ / vàng)\n- Đọc ảnh X-quang, siêu âm\n- Kết hợp triệu chứng lâm sàng ở GĐ 1"]
@@ -403,7 +403,7 @@ flowchart TD
     subgraph LANE_SYSTEM["HỆ THỐNG PHẦN MỀM"]
         S_CALL_SPEAKER["PatientCalledEvent: 'Mời thú cưng [Tên] vào lại phòng [Số]'\n(ca vẫn RESULTS_READY)"]
         S_START_G2["pet_visits: IN_PROGRESS GĐ 2 (T07)\nBác sĩ: BUSY, mở bệnh án tổng hợp"]
-        S_RELEASE_EX10["Ca giữ RESULTS_READY, skip_count + 1\nxếp ngay sau người kế tiếp; Bác sĩ gọi người đó"]
+        S_RELEASE_EX10["Ca giữ RESULTS_READY và giữ nguyên vị trí\n(không đổi queue_order); Bác sĩ gọi ca khác"]
         S_CHECK_BACK{"Khách quay lại?"}
         S_CLOSE_DEBT["pet_visits: COMPLETED (T08, khóa)\nKhông tạo hóa đơn mới: hóa đơn dịch vụ đã làm\ngiữ PENDING làm công nợ\nKết quả CLS lưu vĩnh viễn vào bệnh án"]
         S_CHECK_STOCK{"Số lượng kê <=\nmedicines.stock_quantity?"}
@@ -417,7 +417,7 @@ flowchart TD
     D_FINISH_PREV --> D_SEE_POPUP --> S_CALL_SPEAKER --> D_DECIDE_PATIENT
 
     D_DECIDE_PATIENT -- "[Khách vắng mặt]" --> D_HOLD_G2 --> S_RELEASE_EX10 --> S_CHECK_BACK
-    S_CHECK_BACK -- "[Có, chờ tới lượt]" --> D_SEE_POPUP
+    S_CHECK_BACK -- "[Có, Bác sĩ gọi lại]" --> D_SEE_POPUP
     S_CHECK_BACK -- "[Không quay lại]" --> R_CONFIRM_LEFT --> R_ABANDON --> S_CLOSE_DEBT --> END_DEBT(((Đóng ca, ghi công nợ)))
 
     D_DECIDE_PATIENT -- "[Khách có mặt]" --> D_START_G2 --> S_START_G2 --> D_ANALYZE --> D_INPUT_DIAG --> D_INROOM_G2 --> D_SELECT_MED --> S_CHECK_STOCK
@@ -561,3 +561,5 @@ Ma trận dưới đây thể hiện sự liên kết giữa các Sơ đồ Ho�
 | AD-01, AD-02 (rà soát 11/11) | Xếp vào hàng đợi sảnh chung; "Phân công Bác sĩ đang AVAILABLE"; cảnh báo Khóa ưu tiên / Bác sĩ bận | Lễ tân xếp ca vào hàng đợi riêng của Bác sĩ (gợi ý Bác sĩ ít người chờ), không chặn khi Bác sĩ bận; thêm nhánh Bác sĩ "Gọi số tiếp theo" / "Đẩy lùi 1 bậc" | Lễ tân không phải chờ Bác sĩ rảnh |
 | AD-04 (rà soát 11/11) | "Tạm hoãn" (POSTPONED) rồi "Có mặt" (RECALL, ghim ưu tiên kế tiếp) | "Gọi số tiếp theo"; vắng mặt → "Đẩy lùi 1 bậc" (SKIPPED), quay lại gọi người kế tiếp | Cùng cơ chế với hàng đợi Bác sĩ |
 | AD-05 (rà soát 11/11) | Hộp thoại "Mời vào phòng" chuyển ngay `IN_PROGRESS`; tạm hoãn T13 về tab đã hoãn, Recall | "Gọi số tiếp theo" (ca có KQ đứng đầu), thú cưng vào phòng mới bấm "Bắt đầu GĐ 2" (T07); vắng → "Đẩy lùi 1 bậc"; bỏ T13 | Gọi số trước, đổi trạng thái sau |
+| AD-02, AD-04, AD-05 (cập nhật 13/11) | "Đẩy lùi 1 bậc" (`skip_count + 1`, `action = SKIPPED`, xếp sau người kế tiếp); mỗi dịch vụ CLS một dòng hàng đợi | "Gọi" ở ca bất kỳ; ca vắng giữ nguyên vị trí, khách quay lại thì "Gọi lại"; dịch vụ cùng đợt khám, cùng phòng gộp một ca | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi và làm ca cấp cứu mất ưu tiên; gọi theo từng dòng giống thực tế |
+| AD-02, AD-04 (rà soát 13/11) | Gọi chỉ phát thông báo | Gọi ghi `last_called_at` để đánh dấu ca "Đã gọi HH:mm"; vẫn không đổi trạng thái / thứ tự | Lưu lại thú cưng đã từng được gọi |

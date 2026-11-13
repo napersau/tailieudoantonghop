@@ -135,7 +135,7 @@
     * Đặc tả UC-25 & UC-26 (Tiếp nhận mẫu, Thực hiện cận lâm sàng Lab & CĐHA, Trả kết quả).
     * Đặc tả UC-30, 31, 33 (Hội chẩn kết quả GĐ 2, Kê đơn thuốc điện tử & Chốt đợt khám).
     * Đặc tả UC-34, 35 (Thanh toán hóa đơn dịch vụ & Thu công nợ) và UC-36 (Bán thuốc theo đơn – tùy chọn, trừ kho an toàn).
-    * Xây dựng Ma trận truy vết thực thể nghiệp vụ (CRUD Matrix) và Chỉ mục Quy tắc nghiệp vụ (BR-01 → BR-34; BR-32, BR-33 bổ sung ở v3.0, BR-34 "Gọi số & Đẩy lùi 1 bậc" bổ sung khi rà soát 11/11).
+    * Xây dựng Ma trận truy vết thực thể nghiệp vụ (CRUD Matrix) và Chỉ mục Quy tắc nghiệp vụ (BR-01 → BR-34; BR-32, BR-33 bổ sung ở v3.0, BR-34 "Gọi theo từng dòng" bổ sung khi rà soát 11/11, sửa ngày 13/11).
   - **Vũ Hồng Linh:**
     * Đối chiếu các luồng sự kiện (Luồng chính, Luồng rẽ nhánh, Ngoại lệ) trong Use Case với luồng wireframe giao diện.
 - **Kết quả đầu ra (Deliverables):**
@@ -149,7 +149,7 @@
   - **Lưu Minh Hiển:**
     * Thiết kế Sơ đồ trạng thái Lịch hẹn (`APPOINTMENT`: PENDING $\rightarrow$ CONFIRMED $\rightarrow$ CHECKED_IN / CANCELLED / NO_SHOW).
     * Thiết kế Sơ đồ trạng thái Đợt khám cốt lõi (`PET_VISIT`: WAITING $\rightarrow$ IN_PROGRESS $\rightarrow$ WAITING_RESULTS $\rightarrow$ RESULTS_READY $\rightarrow$ IN_PROGRESS $\rightarrow$ WAITING_PAYMENT $\rightarrow$ COMPLETED).
-    * Xây dựng ma trận chuyển đổi trạng thái (T01 → T14, T13 đã bỏ), quy tắc hàng đợi riêng từng Bác sĩ (Q1 → Q5: xếp thứ tự, phân công, gọi số, Đẩy lùi 1 bậc, ca có kết quả lên đầu) và Sơ đồ trạng thái phục vụ của Bác sĩ (`AVAILABLE` / `BUSY`).
+    * Xây dựng ma trận chuyển đổi trạng thái (T01 → T14, T13 đã bỏ), quy tắc hàng đợi riêng từng Bác sĩ (Q1 → Q5: xếp thứ tự, phân công, gọi số theo từng dòng, khách vắng / quay lại, ca có kết quả lên đầu) và Sơ đồ trạng thái phục vụ của Bác sĩ (`AVAILABLE` / `BUSY`).
   - **Nguyễn Đức Khởi:**
     * Thiết kế Sơ đồ trạng thái Dịch vụ kỹ thuật (`VISIT_SERVICE_DETAIL`: PENDING $\rightarrow$ IN_PROGRESS $\rightarrow$ COMPLETED / CANCELLED).
     * Thiết kế Sơ đồ trạng thái Hóa đơn dịch vụ (`SERVICE_INVOICE`: PENDING $\rightarrow$ PAID / CANCELLED – tạo cùng lúc chỉ định, hủy theo dịch vụ).
@@ -167,7 +167,7 @@
 - **Công việc chi tiết từng thành viên:**
   - **Lưu Minh Hiển:**
     * Thiết kế AD-01: Chu trình khám chữa bệnh ngoại trú 2 pha tổng thể (6 phân làn trách nhiệm).
-    * Thiết kế AD-02: Quy trình tiếp đón, xếp ca vào hàng đợi riêng từng Bác sĩ & gọi số / đẩy lùi 1 bậc.
+    * Thiết kế AD-02: Quy trình tiếp đón, xếp ca vào hàng đợi riêng từng Bác sĩ & gọi số theo từng dòng.
     * Thiết kế AD-03: Thăm khám lâm sàng GĐ 1 & Ra chỉ định cận lâm sàng.
   - **Nguyễn Đức Khởi:**
     * Thiết kế AD-04: Tiến trình thực hiện cận lâm sàng song song tại 2 phòng Lab & CĐHA (Fork & Join) và cơ chế chống xung đột liên phòng.
@@ -251,7 +251,7 @@
 ---
 
 ### Tuần 10: Sprint 2 - Khám bệnh Lâm sàng & Cận lâm sàng 2 pha (26/10 – 01/11/2026)
-- **Mục tiêu tuần:** Hoàn thành toàn bộ phân hệ chuyên môn y tế: Bác sĩ khám 2 pha, Hàng đợi riêng từng Bác sĩ (gọi số, đẩy lùi 1 bậc), Hàng đợi Lab & CĐHA tự động.
+- **Mục tiêu tuần:** Hoàn thành toàn bộ phân hệ chuyên môn y tế: Bác sĩ khám 2 pha, Hàng đợi riêng từng Bác sĩ (gọi số theo từng dòng), Hàng đợi Lab & CĐHA tự động.
 - **Công việc chi tiết từng thành viên:**
   - **Lưu Minh Hiển:**
     * Phát triển phân hệ Bác sĩ khám lâm sàng trong `clinical-service` (:8083):
@@ -311,7 +311,7 @@
     * **Cập nhật bộ tài liệu thiết kế lên v3.0 theo góp ý GVHD:** ERD (hóa đơn riêng cho từng dịch vụ, hóa đơn thuốc tùy chọn, bỏ thuộc tính dẫn xuất), State Machine, Activity, Use Case, Ngoại lệ, FR/NFR, Mô tả nghiệp vụ, Kiến trúc, Quy chuẩn Backend, Lộ trình & Kế hoạch; điều chỉnh mã nguồn tương ứng.
     * **Kiểm thử luồng nghiệp vụ chính (Happy Path Testing):** Khách đặt lịch $\rightarrow$ Lễ tân check-in $\rightarrow$ Phân công Bác sĩ $\rightarrow$ Bác sĩ khám & chỉ định $\rightarrow$ Lab & CĐHA trả kết quả $\rightarrow$ Bác sĩ kê đơn & chốt ca $\rightarrow$ Thu ngân thu tiền hóa đơn dịch vụ (ca `COMPLETED`) $\rightarrow$ (tùy chọn) Bán thuốc theo đơn.
     * **Kiểm thử các tình huống ngoại lệ (Edge Cases Testing):**
-      - Test khách vắng mặt khi được gọi tại phòng khám hoặc phòng CLS $\rightarrow$ Bấm "Đẩy lùi 1 bậc" $\rightarrow$ ca đứng sau người kế tiếp, hệ thống gọi người kế tiếp; khách quay lại chờ đến lượt.
+      - Test khách vắng mặt khi được gọi tại phòng khám hoặc phòng CLS $\rightarrow$ Bấm "Gọi" ở ca khác $\rightarrow$ ca vắng giữ nguyên vị trí; khách quay lại thì "Gọi lại".
       - Test khách xin hủy dịch vụ chụp X-quang giữa chừng $\rightarrow$ Hóa đơn X-quang chuyển `CANCELLED`, chỉ còn thu hóa đơn khám và xét nghiệm máu.
       - Test khách bỏ về khi chờ kết quả $\rightarrow$ Hóa đơn dịch vụ đã làm giữ làm công nợ, thu lại ở lần sau.
       - Test hết thuốc trong kho khi xác nhận bán thuốc $\rightarrow$ Giao dịch rollback an toàn, hóa đơn thuốc giữ `PENDING`, thông báo lỗi rõ ràng.
@@ -430,3 +430,4 @@ gantt
 | Mục 4 (Gantt) | Tên task chứa dấu `:` ("T1: …", "clinical-service: …") làm sơ đồ không hiển thị | Đổi thành dấu `-`; sơ đồ hiển thị bình thường | Lỗi cú pháp Mermaid |
 | Mục 2, Tuần 5 (rà soát 10/11) | "State Machine 5 thực thể" | 6 thực thể (SM-01 → SM-06) | Khớp tài liệu State Machine v3.0 |
 | Mục 2, Tuần 3–6, 9–12 (rà soát 11/11) | Hàng đợi sảnh chung; phân công chỉ khi Bác sĩ rảnh; Khóa ưu tiên `AVAILABLE_PRIORITY_CALLBACK`; vắng mặt → tạm hoãn → gọi lại; BR-01 → BR-33 | Hàng đợi riêng từng Bác sĩ; Lab & CĐHA tự vào hàng đợi khi chỉ định; "Gọi số tiếp theo" / "Đẩy lùi 1 bậc"; ca có kết quả lên đầu hàng đợi Bác sĩ; BR-01 → BR-34 | Khớp yêu cầu mới về hàng đợi (State Machine §2.4, BR-34) |
+| Tuần 4 (rà soát 13/11) | BR-34 "Gọi số & Đẩy lùi 1 bậc" | BR-34 "Gọi theo từng dòng" | Khớp tên BR-34 trong Đặc tả Use Case |

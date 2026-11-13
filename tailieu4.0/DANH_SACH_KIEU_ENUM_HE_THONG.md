@@ -119,7 +119,7 @@
 - **Bảng & Cột:** `visit_service_details.status`; `visit_service_detail_histories.from_status`, `visit_service_detail_histories.to_status`
 - **Cú pháp CSDL:** `ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING'` (riêng `from_status` cho phép `NULL`)
 - **Ý nghĩa các giá trị:**
-  - `'PENDING'`: Dịch vụ vừa được Bác sĩ chỉ định, đang chờ phòng chuyên môn (Lab / CĐHA) tiếp nhận và thực hiện. Dịch vụ nằm trong hàng đợi phòng tương ứng, xếp theo cấp cứu rồi `queue_order`. Gọi không thấy khách thì "Đẩy lùi 1 bậc" (EX-06): vẫn giữ `PENDING`, đổi `queue_order` với dịch vụ ngay sau và ghi `action = 'SKIPPED'` trong `visit_service_detail_histories`.
+  - `'PENDING'`: Dịch vụ vừa được Bác sĩ chỉ định, đang chờ phòng chuyên môn (Lab / CĐHA) tiếp nhận và thực hiện. Dịch vụ nằm trong hàng đợi phòng tương ứng, xếp theo cấp cứu rồi `queue_order`. Các dịch vụ `PENDING` của **cùng một đợt khám trong cùng phòng** (vd. siêu âm + X-quang) gộp thành **một ca**: gọi một lần. Kỹ thuật viên bấm "Gọi" ở dòng bất kỳ; gọi **không đổi trạng thái và không đổi `queue_order`**, khách vắng thì gọi ca khác, khách quay lại thì gọi lại (EX-06).
   - `'IN_PROGRESS'`: Kỹ thuật viên đã tiếp nhận thú cưng / lấy mẫu bệnh phẩm, máy đang phân tích tự động hoặc thú cưng đang trong phòng siêu âm/X-quang.
   - `'COMPLETED'`: Kỹ thuật viên / Bác sĩ CĐHA đã nhập đầy đủ kết quả đo đạc hoặc tải tệp ảnh chẩn đoán lên và nhấn xác nhận hoàn tất.
   - `'CANCELLED'`: Chỉ định bị hủy bỏ (chủ nuôi từ chối thực hiện hoặc bác sĩ thay đổi hướng xử lý). Hóa đơn dịch vụ tương ứng (`service_invoices`) chuyển `CANCELLED` trong cùng giao dịch, không tính tiền.
@@ -181,3 +181,5 @@
 > Các tài liệu khác có trích dẫn số thứ tự enum (ví dụ bảng tổng kết trong `THIET_KE_SO_DO_TRANG_THAI_STATE_MACHINE.md`) cần cập nhật theo bảng đối chiếu này.
 
 > **Rà soát 11/11:** không đổi số lượng enum. `ServiceDetailStatus` và `VisitStatus` chỉ cập nhật mô tả theo mô hình hàng đợi riêng của từng Bác sĩ và cơ chế "Đẩy lùi 1 bậc"; cột `visit_service_detail_histories.action` (VARCHAR, không phải enum) đổi `POSTPONED` / `RECALL` thành `SKIPPED`.
+
+> **Cập nhật 13/11/2026:** hàng đợi dùng "Gọi" theo từng dòng thay cho "Đẩy lùi 1 bậc" (xem State Machine §2.4). Giá trị `SKIPPED` của `visit_service_detail_histories.action` đã bị bỏ (không còn nơi nào ghi); cột `action` còn 5 giá trị `ORDERED`, `START_PROCESSING`, `SAMPLE_COLLECTED`, `COMPLETED`, `CANCELLED`. Không đổi số lượng enum.

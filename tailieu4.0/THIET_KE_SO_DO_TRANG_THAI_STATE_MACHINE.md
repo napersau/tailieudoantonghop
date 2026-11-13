@@ -163,29 +163,31 @@ Mọi dòng dưới đây đều kèm hành động chung: **ghi 1 dòng `pet_vi
 | **T03** | `WAITING` | Lễ tân hủy ca khám (EX-03) | Khách xin về hoặc chờ quá lâu bỏ về; bắt buộc nhập lý do. | Lý do ghi vào `notes` của dòng lịch sử. Ca rời khỏi hàng đợi (của Bác sĩ hoặc danh sách chờ phân công). | `CANCELLED` |
 | **T04** | `IN_PROGRESS` (GĐ 1) | Bác sĩ xác nhận chỉ định cận lâm sàng (UC-23) | Có ít nhất 1 dịch vụ `LABORATORY` hoặc `IMAGING` được chỉ định; đã nhập `weight_at_visit`, `temperature` (> 0); các dịch vụ thực hiện tại phòng đã chỉ định trong GĐ 1 đều `COMPLETED` hoặc `CANCELLED`. | Với mỗi dịch vụ CLS: tạo `visit_service_details` (`PENDING`) + `service_invoices` (`PENDING`, snapshot giá & thuế). Dịch vụ khám chuyển `COMPLETED`. Dịch vụ CLS tự vào hàng đợi phòng Lab / CĐHA (`visit_service_details.queue_order` = thời điểm chỉ định). Bác sĩ được giải phóng và gọi số tiếp theo trong hàng đợi của mình. | `WAITING_RESULTS` |
 | **T05** | `IN_PROGRESS` (GĐ 1) | Bác sĩ chốt ca khám thông thường / tiêm phòng (UC-30_33) | Không có dịch vụ CLS; đã nhập `diagnosis` (EX-12), `weight_at_visit`, `temperature`; mọi dịch vụ thực hiện tại phòng đều `COMPLETED` hoặc `CANCELLED`. | Dịch vụ khám chuyển `COMPLETED`. Lưu đơn thuốc nếu có (`prescriptions` + `prescription_items`, không có giá, không có trạng thái). Khóa hồ sơ chuyên môn. Bác sĩ được giải phóng. | `WAITING_PAYMENT` |
-| **T06** | `WAITING_RESULTS` | Phòng Lab / CĐHA lưu kết quả hoặc khách hủy dịch vụ CLS (UC-25_26, EX-08) | Không còn dịch vụ CLS nào của ca ở `PENDING` hoặc `IN_PROGRESS`. | Hệ thống tự chuyển (`changed_by_user_id = NULL`). Ca quay về **đầu hàng đợi của Bác sĩ khám chính**, chỉ sau ca cấp cứu: `queue_order` = giá trị nhỏ nhất trong hàng đợi của Bác sĩ − 1, `skip_count` = 0. Hiển thị Notification Badge cho Bác sĩ. | `RESULTS_READY` |
+| **T06** | `WAITING_RESULTS` | Phòng Lab / CĐHA lưu kết quả hoặc khách hủy dịch vụ CLS (UC-25_26, EX-08) | Không còn dịch vụ CLS nào của ca ở `PENDING` hoặc `IN_PROGRESS`. | Hệ thống tự chuyển (`changed_by_user_id = NULL`). Ca quay về **đầu hàng đợi của Bác sĩ khám chính**, chỉ sau ca cấp cứu: `queue_order` = giá trị nhỏ nhất trong hàng đợi của Bác sĩ − 1. Hiển thị Notification Badge cho Bác sĩ. | `RESULTS_READY` |
 | **T07** | `RESULTS_READY` | Bác sĩ đã gọi số (mục 2.4), bệnh nhân vào phòng, Bác sĩ bấm *"Bắt đầu Giai đoạn 2"* (UC-30) | Bác sĩ không có ca `IN_PROGRESS` khác. | Bác sĩ chuyển `BUSY`. Mở giao diện Giai đoạn 2 với toàn bộ kết quả CLS. | `IN_PROGRESS` (GĐ 2) |
 | **T08** | `RESULTS_READY` | Thao tác *"Đóng ca / Khách bỏ về"* (EX-11) | Lễ tân đã liên hệ xác nhận khách bỏ về, hoặc đã hết ngày làm việc. | **Không tạo hóa đơn mới.** Các hóa đơn của dịch vụ đã thực hiện (khám, CLS đã `COMPLETED`) giữ `PENDING` làm công nợ, thu ở lần sau. Khóa bệnh án, lưu kết quả vĩnh viễn. | `COMPLETED` (Khóa) |
 | **T09** | `IN_PROGRESS` (GĐ 2) | Bác sĩ chốt đợt khám & kê đơn (UC-30_33) | Đã nhập `diagnosis` (EX-12); mọi dịch vụ thực hiện tại phòng đã chỉ định trong GĐ 2 đều `COMPLETED` hoặc `CANCELLED`. | Lưu đơn thuốc nếu có. Khóa bệnh án. Bác sĩ được giải phóng. Ca hiển thị trên màn hình Thu ngân. | `WAITING_PAYMENT` |
 | **T10** | `WAITING_PAYMENT` | Thu ngân xác nhận thanh toán hóa đơn dịch vụ (UC-35) | Sau lần xác nhận này, **mọi `service_invoices` của ca đều `PAID` hoặc `CANCELLED`**. Không xét hóa đơn thuốc. | Thực hiện trong cùng giao dịch cục bộ của `clinical-service` với việc chuyển hóa đơn sang `PAID` (hệ thống ghi lịch sử, `changed_by_user_id` = thu ngân). Giải phóng ca khỏi màn hình Thu ngân. | `COMPLETED` |
 | **T11** | `IN_PROGRESS` (GĐ 1) | Khách từ chối khám tiếp / Chuyển viện cấp cứu | Bắt buộc nhập lý do. Áp dụng khi phòng khám **không thu phí** và **chưa có dịch vụ tại phòng nào `COMPLETED`**; nếu có thu phí khám hoặc đã thực hiện dịch vụ tại phòng, Bác sĩ chốt ca bình thường theo T05 với chẩn đoán "chuyển viện". | Mọi dịch vụ của ca (dịch vụ khám `IN_PROGRESS`, dịch vụ tại phòng `PENDING`) → `CANCELLED`, kéo theo hóa đơn dịch vụ → `CANCELLED`, nên ca hủy không còn hóa đơn `PENDING`. Bác sĩ được giải phóng. | `CANCELLED` |
 | **T12** | `WAITING_RESULTS` | Thao tác *"Đóng ca / Khách bỏ về"* khi CLS chưa làm xong (EX-11) | Không có dịch vụ CLS nào đang `IN_PROGRESS` (KTV phải hoàn tất hoặc hủy dịch vụ đang làm trước). | Dịch vụ CLS còn `PENDING` → `CANCELLED` (hóa đơn tương ứng → `CANCELLED`). Hóa đơn của dịch vụ đã làm (khám, CLS đã `COMPLETED`) giữ `PENDING` làm công nợ. Khóa bệnh án. | `COMPLETED` (Khóa) |
-| **T13** | *(Bỏ ở rà soát 11/11)* | – | – | Trước đây: GĐ 2 gọi không thấy khách thì chuyển ngược `IN_PROGRESS → RESULTS_READY`. Nay Bác sĩ gọi số **trước khi** chuyển trạng thái; gọi không thấy thì "Đẩy lùi 1 bậc" (mục 2.4, EX-10), ca vẫn `RESULTS_READY`, không có bước chuyển nào. Giữ số hiệu T13 để không đổi tham chiếu T14. | – |
+| **T13** | *(Bỏ ở rà soát 11/11)* | – | – | Trước đây: GĐ 2 gọi không thấy khách thì chuyển ngược `IN_PROGRESS → RESULTS_READY`. Nay Bác sĩ gọi số **trước khi** chuyển trạng thái; gọi không thấy thì Bác sĩ gọi ca khác (mục 2.4, EX-10), ca vẫn `RESULTS_READY` và giữ nguyên vị trí, không có bước chuyển nào. Giữ số hiệu T13 để không đổi tham chiếu T14. | – |
 | **T14** | `WAITING_PAYMENT` | Bác sĩ phụ trách (hoặc `ADMIN`) bấm *"Mở lại hồ sơ"* | Ca chưa `COMPLETED`; Bác sĩ không đang `BUSY` với ca khác; bắt buộc nhập lý do. Nếu đơn thuốc đã có hóa đơn thuốc chưa hủy (`PENDING` hoặc `PAID`) thì không được sửa đơn thuốc. | Lý do ghi vào `notes`. Hóa đơn dịch vụ đã `PAID` giữ nguyên; dịch vụ bị bỏ thì hủy theo SM-03 (hóa đơn đi theo); dịch vụ thêm mới sinh hóa đơn mới. Sau khi sửa, Bác sĩ chốt lại theo T05 / T09. | `IN_PROGRESS` (giữ nguyên giai đoạn trước đó) |
 
-### 2.4. Hàng đợi riêng của Bác sĩ & "Đẩy lùi 1 bậc" (không phải bước chuyển trạng thái)
+### 2.4. Hàng đợi riêng của Bác sĩ & gọi số theo từng dòng (không phải bước chuyển trạng thái)
 
-Các thao tác dưới đây chỉ đổi `doctor_id`, `queue_order`, `skip_count`; trạng thái ca giữ nguyên nên **không ghi** `pet_visit_status_histories`.
+Các thao tác dưới đây chỉ đổi `doctor_id` (phân công) hoặc chỉ ghi `last_called_at` và phát thông báo (gọi số); trạng thái ca giữ nguyên nên **không ghi** `pet_visit_status_histories`. *(Cập nhật 13/11/2026: bỏ "Đẩy lùi 1 bậc" — xem ghi chú dưới bảng.)*
 
 | Mã | Quy tắc | Chi tiết |
 | :---: | :--- | :--- |
-| **Q1** | Hàng đợi của mỗi Bác sĩ | Gồm các ca `WAITING` hoặc `RESULTS_READY` có `doctor_id` = Bác sĩ đó, sắp xếp `ORDER BY (is_emergency AND skip_count = 0) DESC, queue_order ASC` (chỉ mục `idx_visits_queue`). Ca `WAITING` có `doctor_id IS NULL` là **danh sách chờ phân công**. Số thứ tự hiển thị = vị trí trong thứ tự này. |
+| **Q1** | Hàng đợi của mỗi Bác sĩ | Gồm các ca `WAITING` hoặc `RESULTS_READY` có `doctor_id` = Bác sĩ đó, sắp xếp `ORDER BY is_emergency DESC, queue_order ASC` (chỉ mục `idx_visits_queue`). Ca `WAITING` có `doctor_id IS NULL` là **danh sách chờ phân công**. Số thứ tự hiển thị = vị trí trong thứ tự này. |
 | **Q2** | Phân công / đổi Bác sĩ | Lễ tân gán ca `WAITING` vào hàng đợi của **bất kỳ Bác sĩ `ACTIVE` nào, bất cứ lúc nào**, không cần chờ Bác sĩ rảnh. Hệ thống hiển thị số người đang chờ của từng Bác sĩ và gợi ý Bác sĩ ít người chờ nhất; Lễ tân quyết định. Đổi Bác sĩ giữ nguyên `queue_order` (ca đến trước vẫn đứng trước). Ca `RESULTS_READY` luôn thuộc Bác sĩ khám chính, không đổi. |
-| **Q3** | Gọi số tiếp theo | Bác sĩ không có ca `IN_PROGRESS` bấm *"Gọi số tiếp theo"*: hệ thống chọn ca đầu hàng, phát `PatientCalledEvent` (màn hình sảnh + ứng dụng chủ nuôi). Ca chưa đổi trạng thái. Bệnh nhân vào phòng → T02 (ca `WAITING`) hoặc T07 (ca `RESULTS_READY`). |
-| **Q4** | Đẩy lùi 1 bậc | Gọi 2–3 lần không thấy, Bác sĩ bấm *"Đẩy lùi 1 bậc"*: `skip_count + 1`; `queue_order` mới = trung bình cộng của ca ngay sau và ca sau nữa (không có ca sau nữa thì = ca ngay sau + 1; nếu người kế tiếp là ca cấp cứu chưa bị lùi thì = `queue_order` của ca thường đầu tiên − 1). Ca bị lùi đứng ngay sau người kế tiếp, người kế tiếp lên đầu và được gọi. Không giới hạn số lần; `skip_count` dùng để hiển thị và để xếp ca cấp cứu đã bị lùi như ca thường. Không còn ai phía sau thì ca giữ nguyên vị trí. Thực hiện trong 1 giao dịch có kiểm tra `version`. |
+| **Q3** | Gọi | Bác sĩ không có ca `IN_PROGRESS` bấm *"Gọi"* ở **một ca bất kỳ** trong hàng đợi của mình (hoặc *"Gọi số tiếp theo"* để gọi ca đứng đầu): hệ thống ghi `last_called_at = NOW()` (ca được đánh dấu "Đã gọi HH:mm" trên danh sách) và phát `PatientCalledEvent` (màn hình sảnh + ứng dụng chủ nuôi). Ca **chưa đổi trạng thái, không đổi `queue_order`**. Bệnh nhân vào phòng → T02 (ca `WAITING`) hoặc T07 (ca `RESULTS_READY`). Bác sĩ có thể "Bắt đầu khám" trực tiếp ca bất kỳ của mình (không bắt buộc đã gọi). |
+| **Q4** | Khách vắng / quay lại | *(Thay cho "Đẩy lùi 1 bậc" từ 13/11/2026.)* Gọi 2–3 lần không thấy, Bác sĩ **bấm "Gọi" ca khác** trong danh sách; ca vắng **giữ nguyên vị trí và trạng thái**, thứ tự không đổi, không đếm số lần vắng. Khách quay lại (Bác sĩ nhận thông báo hoặc khách báo tại quầy) thì Bác sĩ bấm *"Gọi lại"* ở đúng ca đó. Hệ thống **không theo dõi** việc khách quay lại (gọi lại chỉ cập nhật `last_called_at`). Ca cấp cứu luôn giữ ưu tiên. |
 | **Q5** | Ca vừa có kết quả CLS | T06 đưa ca lên đầu hàng đợi của Bác sĩ khám chính (sau ca cấp cứu). Không còn "Khóa ưu tiên" chặn Lễ tân: Lễ tân vẫn xếp ca mới vào hàng đợi, ca có kết quả tự được gọi trước. |
 
-Phòng Xét nghiệm và CĐHA dùng cùng Q1, Q3, Q4 cho `visit_service_details` (xem SM-03, mục 4).
+Phòng Xét nghiệm và CĐHA dùng cùng Q1, Q3, Q4 cho `visit_service_details` (xem SM-03, mục 4); các dịch vụ `PENDING` của **cùng một đợt khám trong cùng phòng** (ví dụ siêu âm + X-quang) gộp thành **một ca**: gọi một lần, "Bắt đầu" cả ca.
+
+> **Vì sao bỏ "Đẩy lùi 1 bậc":** bản v3.0 đầu xếp ca vắng xuống ngay sau người kế tiếp. Khi hai ca đầu hàng cùng vắng, chúng đổi chỗ cho nhau mãi (`[A, B, C, D]`: lùi `A` → `[B, A, C, D]`; lùi `B` → `[A, B, C, D]`), ca thứ 3, 4 không bao giờ được gọi; ca cấp cứu bị lùi còn mất ưu tiên và cảnh báo. Gọi theo từng dòng giống thực tế phòng khám và không có vòng lặp. Cột `skip_count`, hành động `SKIPPED` và API `skip` đã được xóa khỏi hệ thống.
 
 ---
 
@@ -196,7 +198,7 @@ Hệ thống **không sử dụng cột trạng thái tĩnh trong CSDL** để q
 
 Từ rà soát 11/11, mỗi Bác sĩ có **hàng đợi riêng** (mục 2.4) nên trạng thái Bác sĩ **không còn dùng để quyết định Lễ tân có được phân công hay không**. Lễ tân xếp ca vào hàng đợi của Bác sĩ bất cứ lúc nào; trạng thái chỉ cho biết Bác sĩ có đang khám hay không (hiển thị trên bảng điều phối và chặn Bác sĩ gọi thêm người khi đang khám dở). Còn hai trạng thái:
 - `BUSY`: Bác sĩ đang khám một ca (`IN_PROGRESS`, Giai đoạn 1 hoặc 2).
-- `AVAILABLE`: Bác sĩ không khám ca nào, được bấm *"Gọi số tiếp theo"*.
+- `AVAILABLE`: Bác sĩ không khám ca nào, được bấm *"Gọi"* (hoặc *"Gọi số tiếp theo"*).
 
 Trạng thái `AVAILABLE_PRIORITY_CALLBACK` và cơ chế "Khóa ưu tiên" của bản trước được bỏ: ca vừa có kết quả CLS tự lên đầu hàng đợi của Bác sĩ (Q5), nên không cần chặn Lễ tân.
 
@@ -267,7 +269,7 @@ Có 3 cách một dịch vụ đi qua vòng đời:
 
 | Trạng thái chính | Trạng thái con | `action` mới nhất | Ý nghĩa |
 | :--- | :--- | :--- | :--- |
-| `PENDING` | `QUEUED` | `ORDERED` hoặc `SKIPPED` | Chờ gọi số trong hàng đợi phòng: `ORDER BY (is_emergency AND skip_count = 0) DESC, queue_order` (Q1). Ca bị "Đẩy lùi 1 bậc" (`SKIPPED`) vẫn ở trong hàng đợi, đứng ngay sau người kế tiếp (Q4). |
+| `PENDING` | `QUEUED` | `ORDERED` | Chờ gọi số trong hàng đợi phòng: `ORDER BY is_emergency DESC, queue_order` (Q1). KTV bấm "Gọi" ở ca bất kỳ; gọi không đổi thứ tự hay trạng thái (Q3, Q4). |
 | `IN_PROGRESS` (Lab) | `SAMPLING` | `START_PROCESSING` | Thú cưng đang ở phòng Lab để lấy mẫu. |
 | `IN_PROGRESS` (Lab) | `ANALYZING` | `SAMPLE_COLLECTED` | Đã lấy mẫu xong, thú cưng được tự do; máy đang phân tích. |
 
@@ -281,7 +283,7 @@ stateDiagram-v2
 
     state PENDING {
         [*] --> QUEUED : Vào hàng đợi phòng (queue_order = thời điểm chỉ định)
-        QUEUED --> QUEUED : Gọi không thấy - Đẩy lùi 1 bậc (EX-06 / EX-09)
+        QUEUED --> QUEUED : Gọi / Gọi lại, không đổi trạng thái và thứ tự (EX-06 / EX-09)
     }
 
     QUEUED --> IN_PROGRESS : KTV gọi số, thú cưng vào phòng, bấm "Bắt đầu làm"
@@ -309,7 +311,7 @@ Mọi dòng đều ghi 1 dòng `visit_service_detail_histories` (`from_status`, 
 | :--- | :--- | :--- | :--- | :--- |
 | `[*] (None)` | Bác sĩ chỉ định dịch vụ (T04, hoặc dịch vụ tại phòng trong GĐ 1 / GĐ 2) | Dịch vụ đang `is_active = TRUE` trong `services` | Tạo `visit_service_details` (`PENDING`, `action = ORDERED`) **và** `service_invoices` (`PENDING`, snapshot `unit_price = services.price`, `vat_rate = services.vat_rate`) trong cùng giao dịch. | `PENDING` |
 | `[*] (None)` | Bác sĩ bấm *"Bắt đầu khám"* (T02) | Tự động, chỉ áp dụng cho dịch vụ khám | Tạo dòng dịch vụ khám với `status = IN_PROGRESS` và hóa đơn `PENDING`. | `IN_PROGRESS` |
-| `PENDING` (`QUEUED`) | KTV gọi số nhưng khách không vào, bấm *"Đẩy lùi 1 bậc"* (EX-06, EX-09) | Đã gọi 2–3 lần; có ít nhất 1 dịch vụ khác phía sau trong hàng đợi phòng | Giữ `status = PENDING`, `action = SKIPPED`; `skip_count + 1`; `queue_order` = trung bình cộng của dịch vụ ngay sau và dịch vụ sau nữa (Q4). KTV gọi người kế tiếp. Khách quay lại thì chỉ cần chờ tới lượt, không cần thao tác. | `PENDING` (`QUEUED`) |
+| `PENDING` (`QUEUED`) | KTV bấm *"Gọi"* / *"Gọi lại"* một ca (EX-06, EX-09) | Dịch vụ đang `PENDING` | Giữ `status = PENDING`, không đổi `queue_order`, không ghi lịch sử; ghi `last_called_at = NOW()` cho mọi dịch vụ `PENDING` của ca (cùng đợt khám, cùng phòng); phát `PatientCalledEvent` (`CALLED`). Khách vắng thì KTV gọi ca khác; khách quay lại thì gọi lại, không cần thao tác nào khác. | `PENDING` (`QUEUED`) |
 | `PENDING` | KTV bấm *"Bắt đầu làm"* | Thú cưng đã vào phòng lấy mẫu / lên bàn chụp | `status = IN_PROGRESS`, `action = START_PROCESSING`. | `IN_PROGRESS` |
 | `IN_PROGRESS` (Lab, `SAMPLING`) | KTV bấm *"Đã lấy mẫu"* | Mẫu đã nạp máy | Giữ `status = IN_PROGRESS`, `action = SAMPLE_COLLECTED`. Thú cưng có thể sang phòng CĐHA. | `IN_PROGRESS` (`ANALYZING`) |
 | `PENDING` | Khách xin hủy dịch vụ (EX-08) hoặc Bác sĩ bỏ chỉ định khi mở lại hồ sơ (T14) | Hóa đơn của dịch vụ chưa `PAID`; bắt buộc nhập lý do | `status = CANCELLED`, `action = CANCELLED`; hóa đơn tương ứng → `CANCELLED` trong cùng giao dịch. Nếu đây là dịch vụ CLS cuối cùng còn dở, kích hoạt T06 cho đợt khám. | `CANCELLED` |
@@ -471,3 +473,5 @@ Tài liệu liên quan (cùng thư mục): [DAC_TA_USE_CASE_CORE.md](DAC_TA_USE_
 | SM-01 T06, T07, T13 (rà soát 11/11) | T06 bật Khóa ưu tiên; T07 "Mời vào phòng" chuyển ngay `IN_PROGRESS`; T13 hoãn ngược `IN_PROGRESS → RESULTS_READY` | T06 đưa ca lên đầu hàng đợi Bác sĩ; T07 chỉ chuyển khi bệnh nhân đã vào phòng; bỏ T13 (thay bằng Đẩy lùi 1 bậc) | Gọi số trước, đổi trạng thái sau như phòng CLS |
 | SM-02 (rà soát 11/11) | 3 trạng thái, `BUSY` gồm ca `WAITING` đã gán; Khóa ưu tiên chặn phân công | 2 trạng thái: `BUSY` = đang khám (`IN_PROGRESS`), `AVAILABLE`; bỏ `AVAILABLE_PRIORITY_CALLBACK` | Trạng thái Bác sĩ không còn quyết định việc phân công |
 | SM-03 (rà soát 11/11) | `POSTPONED` (tab Hoãn), `RECALL` (ghim ưu tiên kế tiếp) | Đẩy lùi 1 bậc (`SKIPPED`), dịch vụ vẫn ở trong hàng đợi; bỏ trạng thái con `POSTPONED`, `NEXT_IN_LINE` | Cùng cơ chế với hàng đợi Bác sĩ |
+| SM-01 mục 2.4 (Q3, Q4, T13), SM-03 (cập nhật 13/11) | Q3 "Gọi số tiếp theo" chỉ gọi người đứng đầu; Q4 "Đẩy lùi 1 bậc" (`skip_count + 1`, xếp ngay sau người kế tiếp); mỗi dịch vụ CLS là một dòng hàng đợi | Q3 "Gọi" ca bất kỳ (không đổi thứ tự/trạng thái); Q4 "Khách vắng / quay lại" = gọi ca khác rồi gọi lại; dịch vụ cùng đợt khám, cùng phòng gộp thành một ca | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi và làm ca cấp cứu mất ưu tiên; gọi theo từng dòng giống thực tế |
+| SM-01 mục 2.4 (Q3, Q4), SM-03 (rà soát 13/11) | "Gọi" chỉ phát thông báo, hệ thống không lưu ca đã được gọi; Q4 còn nhắc `skip_count` | "Gọi" ghi `last_called_at` (đánh dấu "Đã gọi HH:mm"), vẫn không đổi trạng thái / thứ tự; bỏ nhắc `skip_count` | Màn hình phải biết ca nào đã từng được gọi (UC-20 Bước 3) |
