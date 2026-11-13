@@ -28,7 +28,6 @@
 --     Thứ tự: ORDER BY is_emergency DESC, queue_order.
 --     [Cập nhật 13/11/2026] Gọi theo từng dòng: bác sĩ / KTV bấm "Gọi" ở dòng bất kỳ, không đổi thứ tự (queue_order giữ nguyên).
 --     Đã BỎ cơ chế "Đẩy lùi 1 bậc" cùng cột skip_count và hành động SKIPPED (làm hai ca đầu hàng đổi chỗ mãi mãi).
---     Mỗi lần "Gọi" ghi last_called_at = thời điểm gọi để màn hình đánh dấu ca "Đã gọi HH:mm" (không dùng để xếp thứ tự).
 --
 -- NGUYÊN TẮC TOÀN VẸN DỮ LIỆU LIÊN DỊCH VỤ:
 -- - Bảng cùng Service: ràng buộc FOREIGN KEY vật lý.
@@ -240,7 +239,6 @@ CREATE TABLE IF NOT EXISTS pet_visits (
     status ENUM('WAITING', 'IN_PROGRESS', 'WAITING_RESULTS', 'RESULTS_READY', 'WAITING_PAYMENT', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'WAITING',
     checked_in_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     queue_order BIGINT NOT NULL, -- Thứ tự trong hàng đợi (nhỏ gọi trước). Gán = thời điểm tiếp nhận (epoch micro giây), không đổi khi gọi; ca vừa có kết quả CLS = nhỏ nhất hàng đợi - 1
-    last_called_at TIMESTAMP NULL, -- Lần "Gọi" / "Gọi lại" gần nhất của Bác sĩ; NULL = chưa được gọi. Chỉ để hiển thị "Đã gọi", không ảnh hưởng thứ tự
     version BIGINT NOT NULL DEFAULT 0, -- Khóa lạc quan
     CONSTRAINT fk_visits_pet FOREIGN KEY (pet_id) REFERENCES pets(id)
 );
@@ -275,7 +273,6 @@ CREATE TABLE IF NOT EXISTS visit_service_details (
     notes TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     queue_order BIGINT NOT NULL, -- Thứ tự trong hàng đợi phòng XN / CĐHA (nhỏ gọi trước). Gán = thời điểm chỉ định (epoch micro giây), không đổi khi gọi
-    last_called_at TIMESTAMP NULL, -- Lần KTV "Gọi" / "Gọi lại" gần nhất; gọi một ca thì cập nhật mọi dịch vụ PENDING cùng đợt khám, cùng phòng. NULL = chưa được gọi
     CONSTRAINT fk_vsd_visit FOREIGN KEY (visit_id) REFERENCES pet_visits(id),
     CONSTRAINT fk_vsd_service FOREIGN KEY (service_id) REFERENCES services(id),
     CONSTRAINT chk_vsd_quantity CHECK (quantity > 0)
@@ -284,7 +281,7 @@ CREATE INDEX idx_vsd_visit ON visit_service_details(visit_id);
 CREATE INDEX idx_vsd_queue ON visit_service_details(status, queue_order); -- Hàng đợi phòng XN / CĐHA
 
 -- 15. VISIT_SERVICE_DETAIL_HISTORIES (AUDIT TRAIL TIẾN ĐỘ DỊCH VỤ)
--- "Gọi" / "Gọi lại" không ghi lịch sử vì không đổi trạng thái hay thứ tự; chỉ cập nhật visit_service_details.last_called_at.
+-- "Gọi" / "Gọi lại" không ghi lịch sử vì không đổi trạng thái hay thứ tự.
 CREATE TABLE IF NOT EXISTS visit_service_detail_histories (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     visit_service_detail_id BIGINT NOT NULL,

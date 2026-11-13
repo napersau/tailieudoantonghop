@@ -498,7 +498,7 @@ Hệ thống có **bốn loại hàng đợi**, tất cả dùng chung cơ chế
 | **Hàng đợi phòng Xét nghiệm** | Hệ thống, tự động khi Bác sĩ chỉ định xét nghiệm | KTV Xét nghiệm | Dịch vụ `LABORATORY` đang `PENDING` |
 | **Hàng đợi phòng CĐHA** | Hệ thống, tự động khi Bác sĩ chỉ định siêu âm / X-quang | KTV / Bác sĩ CĐHA | Dịch vụ `IMAGING` đang `PENDING` |
 
-**Gọi:** mỗi ca trong hàng đợi có nút *"Gọi"* (và *"Bắt đầu"*). Người phụ trách hàng đợi (khi không đang làm dở ca nào) bấm *"Gọi"* ở một ca **bất kỳ** (hoặc *"Gọi số tiếp theo"* để gọi ca đứng đầu): hệ thống hiển thị số thứ tự và số phòng trên màn hình sảnh, gửi thông báo đến ứng dụng của chủ nuôi và **lưu lại giờ gọi gần nhất** (`last_called_at`), nên trên danh sách ca đó mang nhãn "Đã gọi HH:mm". Gọi **không đổi trạng thái và không đổi thứ tự**: ca chỉ đổi trạng thái khi thú cưng vào phòng và người phụ trách bấm "Bắt đầu khám" / "Bắt đầu Giai đoạn 2" / "Bắt đầu thực hiện".
+**Gọi:** mỗi ca trong hàng đợi có nút *"Gọi"* (và *"Bắt đầu"*). Người phụ trách hàng đợi (khi không đang làm dở ca nào) bấm *"Gọi"* ở một ca **bất kỳ** (hoặc *"Gọi số tiếp theo"* để gọi ca đứng đầu): hệ thống hiển thị số thứ tự và số phòng trên màn hình sảnh và gửi thông báo đến ứng dụng của chủ nuôi. Gọi **không đổi trạng thái và không đổi thứ tự**: ca chỉ đổi trạng thái khi thú cưng vào phòng và người phụ trách bấm "Bắt đầu khám" / "Bắt đầu Giai đoạn 2" / "Bắt đầu thực hiện".
 
 **Khách vắng / quay lại:** gọi 2–3 lần không thấy, người phụ trách bấm *"Gọi"* ở **ca khác** trong danh sách; ca vắng giữ nguyên vị trí. Ví dụ hàng đợi Bác sĩ A là `[Milo, Lu, Na]`: gọi Milo không thấy → gọi Lu (hàng đợi vẫn là `[Milo, Lu, Na]`). Khi khách quay lại (Bác sĩ nhận thông báo hoặc khách báo tại quầy), Bác sĩ bấm *"Gọi lại"* ở đúng ca đó. Hệ thống không theo dõi việc khách quay lại, nên không bao giờ xảy ra tình trạng hai ca đầu hàng đổi chỗ cho nhau mãi mãi hay ca cấp cứu bị mất ưu tiên. *(Cập nhật 13/11/2026: thay cho cơ chế "Đẩy lùi 1 bậc" của bản v3.0 đầu; cột `skip_count`, hành động `SKIPPED` và API đẩy lùi đã bị xóa.)*
 
@@ -787,7 +787,7 @@ Khi nhân sự phòng Lab / CĐHA nhập đầy đủ kết quả đo đạc (WB
 
 > **Xử lý tình huống khách chưa vào phòng ngay:**  
 > - **Khi khách vắng mặt lúc gọi số:** Gọi 2–3 lần không thấy, Bác sĩ bấm **"Gọi"** ca khác (EX-10): ca giữ `RESULTS_READY` và giữ nguyên vị trí (vẫn đứng đầu hàng đợi); khách quay lại thì "Gọi lại".  
-> - **Khi khách quay lại phòng khám:** Bác sĩ (khi nhận được thông tin khách đã quay lại) bấm **"Gọi lại"** ở đúng ca đó rồi tiếp tục Bước 3. Hệ thống không theo dõi việc khách quay lại.  
+> - **Khi khách quay lại phòng khám:** Khách chờ tới lượt; Bác sĩ gọi đến thì tiếp tục Bước 3.  
 > - **Trường hợp khách bỏ về hẳn (không quay lại đọc kết quả):** Sau khi Lễ tân liên hệ điện thoại xác nhận khách đã bỏ về hoặc đến hết ngày làm việc, Lễ tân hoặc Bác sĩ chọn thao tác **"Đóng ca / Khách bỏ về"**:  
 >   + Hệ thống khóa hồ sơ chuyên môn, lưu trữ vĩnh viễn các kết quả xét nghiệm/CĐHA đã thực hiện vào Lịch sử bệnh án của thú cưng.  
 >   + Ca chuyển `COMPLETED` và rời khỏi hàng đợi. **Không lập hóa đơn mới**: hóa đơn của các dịch vụ đã thực hiện đã có sẵn từ lúc chỉ định và tiếp tục giữ `PENDING` làm công nợ, thu ở lần khách đến sau (đảm bảo không thất thoát doanh thu của phòng khám).
@@ -1138,7 +1138,7 @@ Visit
 
 **Hóa đơn thuốc (`medicine_invoices` + `medicine_invoice_items`, thuộc `billing-pharmacy-service`) lưu:**
 - Mã hóa đơn (`MINV-YYYY-XXXX`), đơn thuốc tương ứng (tối đa 1 hóa đơn / đơn thuốc).
-- Từng thuốc khách mua: số lượng (≤ số lượng kê), đơn giá và thuế suất snapshot lúc lập hóa đơn.
+- Từng thuốc khách mua: số lượng (số kê chỉ tham khảo; không vượt tồn kho), đơn giá và thuế suất snapshot lúc lập hóa đơn.
 - Giảm giá, trạng thái thanh toán, thu ngân, thời điểm thanh toán.
 
 **Không lưu:** tổng tiền dịch vụ, tổng tiền thuốc, tổng phải thanh toán (tính được, xem mục 28) và **phương thức thanh toán** (khách trả ngoài quầy, hệ thống không tích hợp VietQR / máy POS trong phạm vi đồ án).
@@ -1173,7 +1173,7 @@ Khách hàng **không bắt buộc** mua thuốc tại phòng khám.
             └── Khách mua tại phòng khám
                    │
                    ↓
-            Chọn thuốc & số lượng (được mua một phần, ≤ số lượng kê)
+            Chọn thuốc & số lượng (nhiều / ít / bằng số kê, ≤ tồn kho)
                    ↓
             Lập hóa đơn thuốc (PENDING, chốt đơn giá & thuế suất)
                    ↓
@@ -1384,13 +1384,13 @@ Hóa đơn `CANCELLED` không tính vào doanh thu. Số tiền tính qua `v_ser
 - **BR-27:** Hóa đơn dịch vụ được lập tự động lúc chỉ định; thu ngân chỉ xác nhận thanh toán khi Visit đã được bác sĩ chốt chuyên môn (`WAITING_PAYMENT`) hoặc khi thu công nợ của Visit đã đóng.
 - **BR-28:** Visit chuyển sang `COMPLETED` khi mọi hóa đơn dịch vụ đều `PAID` hoặc `CANCELLED`; việc mua thuốc không ảnh hưởng. Ngoại lệ: khi khách bỏ về (EX-11), Visit được đóng sang `COMPLETED` và các hóa đơn dịch vụ còn `PENDING` giữ làm công nợ.
 - **BR-33:** Khi một dịch vụ được chỉ định bị hủy, hóa đơn dịch vụ tương ứng chuyển `CANCELLED` trong cùng giao dịch; không có thao tác hủy hóa đơn dịch vụ riêng lẻ và không được hủy dịch vụ có hóa đơn đã thanh toán.
-- **BR-34:** Ở hàng đợi bác sĩ, phòng Xét nghiệm và phòng CĐHA, mỗi ca có nút "Gọi" (phát thông báo và lưu giờ gọi gần nhất để đánh dấu ca "Đã gọi"; không đổi trạng thái và không đổi thứ tự) và "Bắt đầu"; "Gọi số tiếp theo" là phím tắt gọi người đứng đầu. Khách vắng thì gọi ca khác; khách quay lại thì gọi lại (hệ thống không theo dõi việc quay lại). Ca cấp cứu luôn giữ ưu tiên. Ở phòng Xét nghiệm / CĐHA, các dịch vụ chờ của cùng một đợt khám trong cùng phòng là một ca (gọi một lần).
+- **BR-34:** Ở hàng đợi bác sĩ, phòng Xét nghiệm và phòng CĐHA, mỗi ca có nút "Gọi" (chỉ phát thông báo, không đổi trạng thái và không đổi thứ tự) và "Bắt đầu"; "Gọi số tiếp theo" là phím tắt gọi người đứng đầu. Khách vắng thì gọi ca khác; khách quay lại thì gọi lại (hệ thống không theo dõi việc quay lại). Ca cấp cứu luôn giữ ưu tiên. Ở phòng Xét nghiệm / CĐHA, các dịch vụ chờ của cùng một đợt khám trong cùng phòng là một ca (gọi một lần).
 
 ### Nhóm kho dược
 - **BR-29:** Thuốc chỉ bị trừ tồn kho khi hóa đơn thuốc được xác nhận thanh toán; chuyển `PAID`, trừ kho và ghi nhật ký `EXPORT_SALE` diễn ra trong cùng một giao dịch.
 - **BR-30:** Không được bán (xuất kho) vượt quá số lượng tồn kho tại thời điểm xác nhận; khi kê đơn, số lượng vượt tồn kho chỉ bị cảnh báo.
 - **BR-31:** Mỗi đơn thuốc có tối đa một hóa đơn thuốc; hóa đơn thuốc đã thanh toán không được xác nhận lại, nên một đơn thuốc không bị trừ kho nhiều hơn một lần.
-- **BR-32:** Khách hàng được tự chọn mua thuốc tại phòng khám hoặc mua ngoài theo đơn in; được mua một phần đơn với số lượng mỗi thuốc không vượt số lượng kê.
+- **BR-32:** Khách hàng được tự chọn mua thuốc tại phòng khám hoặc mua ngoài theo đơn in; được mua nhiều hơn, ít hơn hoặc bằng số lượng kê (số kê chỉ để tham khảo), nhưng không vượt tồn kho hiện tại.
 
 ---
 
@@ -1688,4 +1688,4 @@ USER
 | Mục 40 (rà soát 10/11) | BR-32 nằm trước BR-29 | Xếp lại theo thứ tự số | Trình bày |
 | Mục 2, 4, 5.3, 8, 9, 10, 11, 12, 15, 16, 17, 17.1, 17.2, 17.3, 42.2, 41 (rà soát 11/11) | Một hàng đợi chung ở sảnh; Lễ tân chỉ phân công khi bác sĩ rảnh, phân xong bác sĩ thành `BUSY`; Khóa ưu tiên chặn Lễ tân; phòng CLS "Tạm hoãn" sang tab riêng rồi "Recall" ghim "Ưu tiên kế tiếp"; GĐ 2 hoãn ngược `IN_PROGRESS → RESULTS_READY` | Mỗi bác sĩ có hàng đợi riêng, Lễ tân xếp ca ngay khi tiếp nhận (gợi ý bác sĩ ít người chờ); bác sĩ / KTV "Gọi số tiếp theo"; gọi không thấy thì "Đẩy lùi 1 bậc"; ca có kết quả tự lên đầu hàng đợi bác sĩ; trạng thái bác sĩ còn `AVAILABLE` / `BUSY`; sửa BR-11, BR-12, thêm BR-34 | Lễ tân không phải chờ bác sĩ rảnh; một cơ chế hàng đợi cho phòng khám, Xét nghiệm, CĐHA |
 | Mục 3, 5.3, 8, 9, 15, 17, BR-09, BR-12, BR-34 (cập nhật 13/11) | "Gọi số tiếp theo" + "Đẩy lùi 1 bậc" (ca vắng xuống ngay sau người kế tiếp, đếm số lần lùi, ca cấp cứu bị lùi mất ưu tiên); mỗi dịch vụ CLS là một dòng hàng đợi | "Gọi" theo từng dòng (không đổi thứ tự), khách vắng thì gọi ca khác, khách quay lại thì gọi lại; ca cấp cứu luôn giữ ưu tiên; dịch vụ cùng đợt khám, cùng phòng gộp thành một ca | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi (ca thứ 3, 4 không được gọi); gọi theo từng dòng giống thực tế phòng khám |
-| Mục 9, 17, BR-34 (rà soát 13/11) | "Gọi" chỉ phát thông báo; khách quay lại ở GĐ 2 "chờ tới lượt" | "Gọi" lưu giờ gọi gần nhất (`last_called_at`), ca mang nhãn "Đã gọi HH:mm"; khách quay lại thì Bác sĩ "Gọi lại" | Yêu cầu lưu ca đã từng được gọi; bỏ câu còn sót của cơ chế cũ |
+| Mục bán thuốc, BR-32 (cập nhật 13/11) | Số lượng mua mỗi thuốc không vượt số lượng bác sĩ kê | Số kê chỉ tham khảo; mua nhiều hơn / ít hơn / bằng, không vượt tồn kho; màn hình bán thuốc hiện tồn kho | Khách thực tế có thể cần khác đơn; ràng buộc đúng là tồn kho |

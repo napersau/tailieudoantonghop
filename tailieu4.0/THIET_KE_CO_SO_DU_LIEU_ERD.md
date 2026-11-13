@@ -216,7 +216,6 @@ erDiagram
         enum status "Trạng thái hiện tại của đợt khám: WAITING, IN_PROGRESS, WAITING_RESULTS, RESULTS_READY, WAITING_PAYMENT, COMPLETED, CANCELLED"
         timestamp checked_in_at "Thời điểm tiếp đón"
         bigint queue_order "Thứ tự trong hàng đợi Bác sĩ (nhỏ gọi trước)"
-        timestamp last_called_at "Lần gọi gần nhất (NULL = chưa gọi)"
         bigint version "Khóa lạc quan, chống ghi đè đồng thời"
     }
 
@@ -239,7 +238,6 @@ erDiagram
         text notes "Ghi chú chỉ định của bác sĩ"
         timestamp created_at "Thời điểm chỉ định"
         bigint queue_order "Thứ tự trong hàng đợi phòng XN / CĐHA"
-        timestamp last_called_at "Lần gọi gần nhất (NULL = chưa gọi)"
     }
 
     VISIT_SERVICE_DETAIL_HISTORIES {
@@ -363,7 +361,7 @@ erDiagram
         bigint id PK "Khóa chính, tự tăng"
         bigint medicine_invoice_id FK "Hóa đơn thuốc chứa dòng này"
         bigint prescription_item_id FK "Dòng thuốc trong đơn được mua"
-        int quantity "Số lượng khách mua (≤ số kê)"
+        int quantity "Số lượng khách mua (số kê chỉ tham khảo; ≤ tồn kho lúc lập)"
         decimal(12,2) unit_price "Giá bán chốt lúc lập hóa đơn"
         decimal(4,2) vat_rate "Thuế suất chốt lúc lập hóa đơn"
     }
@@ -551,7 +549,6 @@ erDiagram
 | `status` | ENUM('WAITING', 'IN_PROGRESS', 'WAITING_RESULTS', 'RESULTS_READY', 'WAITING_PAYMENT', 'COMPLETED', 'CANCELLED') | NOT NULL, DEFAULT 'WAITING' | Trạng thái hiện tại của đợt khám |
 | `checked_in_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Thời điểm tiếp đón |
 | `queue_order` | BIGINT | NOT NULL | Thứ tự trong hàng đợi của Bác sĩ (nhỏ được gọi trước). Gán bằng thời điểm tiếp nhận (epoch micro giây) nên ca đến trước đứng trước; giữ nguyên khi đổi Bác sĩ. Gọi / Gọi lại không đổi giá trị này (từ 13/11/2026 đã bỏ cơ chế "Đẩy lùi 1 bậc" cùng cột `skip_count`). Ca vừa có kết quả CLS: gán bằng `queue_order` nhỏ nhất trong hàng đợi của Bác sĩ đó − 1 (lên đầu, sau ca cấp cứu) |
-| `last_called_at` | TIMESTAMP | NULL | Thời điểm Bác sĩ bấm "Gọi" / "Gọi lại" gần nhất. `NULL` = chưa được gọi lần nào. Màn hình hàng đợi dùng cột này để đánh dấu ca "Đã gọi HH:mm"; **không** dùng để xếp thứ tự |
 | `version` | BIGINT | NOT NULL, DEFAULT 0 | Khóa lạc quan, chống ghi đè đồng thời |
 
 #### Bảng `pet_visit_status_histories` (Lịch sử chuyển trạng thái đợt khám)
@@ -578,7 +575,6 @@ erDiagram
 | `notes` | TEXT | NULL | Ghi chú chỉ định của bác sĩ |
 | `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Thời điểm chỉ định |
 | `queue_order` | BIGINT | NOT NULL | Thứ tự trong hàng đợi phòng Xét nghiệm / CĐHA (nhỏ được gọi trước). Gán bằng thời điểm chỉ định (epoch micro giây); gọi theo từng dòng không đổi giá trị này |
-| `last_called_at` | TIMESTAMP | NULL | Thời điểm KTV bấm "Gọi" / "Gọi lại" gần nhất. Gọi một ca thì cập nhật mọi dịch vụ `PENDING` cùng đợt khám, cùng phòng. `NULL` = chưa được gọi; không dùng để xếp thứ tự |
 
 *Ràng buộc mức bảng:* `CHECK (quantity > 0)`
 
@@ -720,7 +716,7 @@ erDiagram
 | `id` | BIGINT | PK, AUTO_INCREMENT | Khóa chính, tự tăng |
 | `medicine_invoice_id` | BIGINT | FK → medicine_invoices(id), ON DELETE CASCADE, NOT NULL | Hóa đơn thuốc chứa dòng này |
 | `prescription_item_id` | BIGINT | FK → prescription_items(id), NOT NULL | Dòng thuốc trong đơn được mua |
-| `quantity` | INT | NOT NULL | Số lượng khách mua (≤ số kê) |
+| `quantity` | INT | NOT NULL | Số lượng khách mua; có thể khác số bác sĩ kê (chỉ tham khảo), nhưng ≤ tồn kho lúc lập / sửa hóa đơn |
 | `unit_price` | DECIMAL(12, 2) | NOT NULL | Giá bán chốt lúc lập hóa đơn |
 | `vat_rate` | DECIMAL(4, 2) | NOT NULL | Thuế suất chốt lúc lập hóa đơn |
 
@@ -825,7 +821,5 @@ Phiên bản 3.0 điều chỉnh theo góp ý của Giảng viên hướng dẫn
 | `prescription_items` | Bỏ `unit_price`, `subtotal`; thêm `UNIQUE` | Giá chỉ chốt khi bán (ở hóa đơn thuốc); `subtotal` dẫn xuất. |
 | `inventory_transactions` | Bỏ `balance_after`, `reference_id`; thêm `medicine_invoice_id`; `EXPORT_PRESCRIPTION` → `EXPORT_SALE` | `balance_after` tính bằng tổng lũy kế; thay tham chiếu chung chung bằng khóa ngoại thật; thuốc chỉ rời kho khi bán. |
 | `visit_service_detail_histories` (rà soát 10/11) | Mô tả cột `action` liệt kê đủ 7 giá trị, gồm `SAMPLE_COLLECTED` | Khớp `schema_init.sql` và EX-09 |
-| `pet_visits`, `visit_service_details` (rà soát 11/11) | Thêm `queue_order`, `skip_count` (cả hai bảng); đổi chỉ mục `idx_visits_queue` thành `(doctor_id, status, is_emergency, queue_order)`, `idx_vsd_status` thành `idx_vsd_queue (status, queue_order)` | Mỗi Bác sĩ có hàng đợi riêng; gọi không thấy khách thì gọi ca khác trong danh sách (thứ tự không đổi) ở cả phòng khám, Xét nghiệm, CĐHA (cơ chế lúc đó là "Đẩy lùi 1 bậc", đã bỏ ở dòng dưới) |
+| `pet_visits`, `visit_service_details` (rà soát 11/11) | Thêm `queue_order`, `skip_count` (cả hai bảng); đổi chỉ mục `idx_visits_queue` thành `(doctor_id, status, is_emergency, queue_order)`, `idx_vsd_status` thành `idx_vsd_queue (status, queue_order)` | Mỗi Bác sĩ có hàng đợi riêng; gọi không thấy khách thì gọi ca khác trong danh sách (thứ tự không đổi) ở cả phòng khám, Xét nghiệm, CĐHA; "Đẩy lùi 1 bậc" còn lại như cơ chế dự phòng (cập nhật 13/11/2026) |
 | `visit_service_detail_histories` (rà soát 11/11) | `action` bỏ `POSTPONED`, `RECALL`; thêm `SKIPPED` (6 giá trị) | Không còn tab "Ca tạm hoãn" và ghim "Ưu tiên kế tiếp"; ca bị lùi vẫn ở trong hàng đợi |
-| `pet_visits`, `visit_service_details` (cập nhật 13/11) | Bỏ `skip_count`, hai ràng buộc `CHECK (skip_count >= 0)` và giá trị `action = 'SKIPPED'`; thứ tự hàng đợi còn `is_emergency DESC, queue_order`; thêm `last_called_at TIMESTAMP NULL` (lần gọi gần nhất) ở cả hai bảng | "Gọi" theo từng dòng không đổi thứ tự; hệ thống vẫn lưu ca đã từng được gọi để hiển thị "Đã gọi HH:mm" |
-

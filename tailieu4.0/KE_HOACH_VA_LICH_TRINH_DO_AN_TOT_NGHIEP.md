@@ -135,7 +135,7 @@
     * Đặc tả UC-25 & UC-26 (Tiếp nhận mẫu, Thực hiện cận lâm sàng Lab & CĐHA, Trả kết quả).
     * Đặc tả UC-30, 31, 33 (Hội chẩn kết quả GĐ 2, Kê đơn thuốc điện tử & Chốt đợt khám).
     * Đặc tả UC-34, 35 (Thanh toán hóa đơn dịch vụ & Thu công nợ) và UC-36 (Bán thuốc theo đơn – tùy chọn, trừ kho an toàn).
-    * Xây dựng Ma trận truy vết thực thể nghiệp vụ (CRUD Matrix) và Chỉ mục Quy tắc nghiệp vụ (BR-01 → BR-34; BR-32, BR-33 bổ sung ở v3.0, BR-34 "Gọi theo từng dòng" bổ sung khi rà soát 11/11, sửa ngày 13/11).
+    * Xây dựng Ma trận truy vết thực thể nghiệp vụ (CRUD Matrix) và Chỉ mục Quy tắc nghiệp vụ (BR-01 → BR-34; BR-32, BR-33 bổ sung ở v3.0, BR-34 "Gọi số & Đẩy lùi 1 bậc" bổ sung khi rà soát 11/11).
   - **Vũ Hồng Linh:**
     * Đối chiếu các luồng sự kiện (Luồng chính, Luồng rẽ nhánh, Ngoại lệ) trong Use Case với luồng wireframe giao diện.
 - **Kết quả đầu ra (Deliverables):**
@@ -294,7 +294,7 @@
   - **Vũ Hồng Linh:**
     * Cắt và ghép API các màn hình tài chính & dược:
       - Màn hình Thu ngân – Hóa đơn dịch vụ: Bảng kê từng hóa đơn dịch vụ, giảm giá từng hóa đơn, xác nhận thanh toán, in phiếu thu, danh sách công nợ.
-      - Màn hình Bán thuốc theo đơn: Chọn thuốc / số lượng khách mua (≤ số lượng kê), lập hóa đơn thuốc, xác nhận thanh toán & xuất thuốc, in đơn cho khách mua ngoài.
+      - Màn hình Bán thuốc theo đơn: Chọn thuốc / số lượng khách mua (số kê chỉ tham khảo; không vượt tồn kho), lập hóa đơn thuốc, xác nhận thanh toán & xuất thuốc, in đơn cho khách mua ngoài.
       - Màn hình Quản trị kho dược (Admin): Danh sách thuốc, nhập kho, kiểm kê tồn kho, cảnh báo thuốc sắp hết.
       - Tích hợp WebSocket client: Nhận chuông và popup thông báo thời gian thực.
 - **Kết quả đầu ra (Milestone 4 - Ngày 08/11/2026):**
@@ -430,4 +430,3 @@ gantt
 | Mục 4 (Gantt) | Tên task chứa dấu `:` ("T1: …", "clinical-service: …") làm sơ đồ không hiển thị | Đổi thành dấu `-`; sơ đồ hiển thị bình thường | Lỗi cú pháp Mermaid |
 | Mục 2, Tuần 5 (rà soát 10/11) | "State Machine 5 thực thể" | 6 thực thể (SM-01 → SM-06) | Khớp tài liệu State Machine v3.0 |
 | Mục 2, Tuần 3–6, 9–12 (rà soát 11/11) | Hàng đợi sảnh chung; phân công chỉ khi Bác sĩ rảnh; Khóa ưu tiên `AVAILABLE_PRIORITY_CALLBACK`; vắng mặt → tạm hoãn → gọi lại; BR-01 → BR-33 | Hàng đợi riêng từng Bác sĩ; Lab & CĐHA tự vào hàng đợi khi chỉ định; "Gọi số tiếp theo" / "Đẩy lùi 1 bậc"; ca có kết quả lên đầu hàng đợi Bác sĩ; BR-01 → BR-34 | Khớp yêu cầu mới về hàng đợi (State Machine §2.4, BR-34) |
-| Tuần 4 (rà soát 13/11) | BR-34 "Gọi số & Đẩy lùi 1 bậc" | BR-34 "Gọi theo từng dòng" | Khớp tên BR-34 trong Đặc tả Use Case |

@@ -196,7 +196,7 @@ flowchart TD
         S_CREATE_VISIT["Tạo pet_visits: WAITING (T01)\nqueue_order = thời điểm tiếp nhận\nNếu có hẹn: phát VisitCheckedInEvent"]
         S_SUGGEST["Hiển thị số người đang chờ của từng Bác sĩ,\ngợi ý Bác sĩ ít người chờ nhất"]
         S_ASSIGN["Gán pet_visits.doctor_id (ca vẫn WAITING)\nCa vào hàng đợi của Bác sĩ theo queue_order\nIn phiếu số phòng + số thứ tự"]
-        S_PICK_HEAD["Ca được chọn (mặc định: đầu hàng đợi\nORDER BY is_emergency DESC, queue_order)\nPhát PatientCalledEvent (màn hình sảnh + ứng dụng)\nGhi last_called_at (nhãn Đã gọi HH:mm)\nKhông đổi trạng thái và queue_order"]
+        S_PICK_HEAD["Ca được chọn (mặc định: đầu hàng đợi\nORDER BY is_emergency DESC, queue_order)\nPhát PatientCalledEvent (màn hình sảnh + ứng dụng)\nKhông đổi trạng thái và queue_order"]
         S_SKIP["Ca vắng giữ nguyên vị trí (không đổi queue_order,\nkhông đếm lần vắng); ca cấp cứu giữ ưu tiên.\nKhách quay lại: Bác sĩ bấm 'Gọi lại'"]
     end
 
@@ -310,7 +310,7 @@ flowchart TD
         L_QUEUE["Hàng đợi Xét nghiệm (PENDING)\ncấp cứu trước, rồi queue_order\n(dịch vụ cùng đợt khám gộp một ca)"]
         L_CALL["KTV bấm 'Gọi' ở một ca\n(hoặc 'Gọi số tiếp theo' gọi ca đứng đầu)"]
         L_DECIDE_PRESENT{"Khách có mặt\nsau 2-3 lần gọi?"}
-        L_POSTPONE["[EX-06] Bấm 'Gọi' ca khác\n(ca vắng giữ nguyên vị trí, không ghi lịch sử;\nmỗi lần gọi ghi last_called_at)"]
+        L_POSTPONE["[EX-06] Bấm 'Gọi' ca khác\n(ca vắng giữ nguyên vị trí, không ghi lịch sử)"]
         L_START["Bấm 'Bắt đầu làm' (IN_PROGRESS, START_PROCESSING)\nLấy mẫu máu"]
         L_SAMPLED["Bấm 'Đã lấy mẫu' (SAMPLE_COLLECTED)\nThú cưng rời phòng Lab"]
         L_MACHINE["Máy huyết học / sinh hóa phân tích tự động"]
@@ -456,7 +456,7 @@ flowchart TD
         C_CHECK_BILL["Kiểm tra bảng kê các hóa đơn dịch vụ"]
         C_MAKE_PAYMENT["Thanh toán bên ngoài quầy\n(tiền mặt hoặc chuyển khoản)"]
         C_DECIDE_BUY{"Mua thuốc tại\nphòng khám?"}
-        C_CHOOSE_ITEMS["Chọn thuốc & số lượng muốn mua\n(được mua một phần đơn)"]
+        C_CHOOSE_ITEMS["Chọn thuốc & số lượng muốn mua\n(nhiều / ít / bằng số kê, không quá tồn kho)"]
         C_PAY_MED["Thanh toán tiền thuốc"]
         C_RECEIVE["Nhận thuốc, phiếu hướng dẫn & ra về"]
         C_OUTSIDE["Nhận đơn thuốc in, ra về mua ngoài"]
@@ -562,4 +562,3 @@ Ma trận dưới đây thể hiện sự liên kết giữa các Sơ đồ Ho�
 | AD-04 (rà soát 11/11) | "Tạm hoãn" (POSTPONED) rồi "Có mặt" (RECALL, ghim ưu tiên kế tiếp) | "Gọi số tiếp theo"; vắng mặt → "Đẩy lùi 1 bậc" (SKIPPED), quay lại gọi người kế tiếp | Cùng cơ chế với hàng đợi Bác sĩ |
 | AD-05 (rà soát 11/11) | Hộp thoại "Mời vào phòng" chuyển ngay `IN_PROGRESS`; tạm hoãn T13 về tab đã hoãn, Recall | "Gọi số tiếp theo" (ca có KQ đứng đầu), thú cưng vào phòng mới bấm "Bắt đầu GĐ 2" (T07); vắng → "Đẩy lùi 1 bậc"; bỏ T13 | Gọi số trước, đổi trạng thái sau |
 | AD-02, AD-04, AD-05 (cập nhật 13/11) | "Đẩy lùi 1 bậc" (`skip_count + 1`, `action = SKIPPED`, xếp sau người kế tiếp); mỗi dịch vụ CLS một dòng hàng đợi | "Gọi" ở ca bất kỳ; ca vắng giữ nguyên vị trí, khách quay lại thì "Gọi lại"; dịch vụ cùng đợt khám, cùng phòng gộp một ca | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi và làm ca cấp cứu mất ưu tiên; gọi theo từng dòng giống thực tế |
-| AD-02, AD-04 (rà soát 13/11) | Gọi chỉ phát thông báo | Gọi ghi `last_called_at` để đánh dấu ca "Đã gọi HH:mm"; vẫn không đổi trạng thái / thứ tự | Lưu lại thú cưng đã từng được gọi |
