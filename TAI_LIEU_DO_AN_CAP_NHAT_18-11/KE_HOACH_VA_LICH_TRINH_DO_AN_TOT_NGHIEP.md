@@ -3,8 +3,8 @@
 
 > **Thời gian thực hiện toàn khóa:** 24/08/2026 – 20/11/2026 (Tổng cộng **13 tuần / 89 ngày**)  
 > **Mốc bắt đầu:** Ngày 24/08/2026  
-> **Thời điểm hiện tại:** Ngày 10/11/2026 (Tuần thứ 12 – Sprint 4: Tích hợp, kiểm thử & hoàn thiện Báo cáo)  
-> **Phiên bản tài liệu:** 3.0 – đồng bộ bộ tài liệu thiết kế v3.0 (cập nhật theo góp ý của GVHD về hóa đơn).  
+> **Thời điểm hiện tại:** Ngày 18/11/2026 (Tuần thứ 13 – Về đích; cập nhật tài liệu theo nhận xét chi tiết của GVHD về thiết kế CSDL và kiến trúc phân tán)  
+> **Phiên bản tài liệu:** 4.0 – đồng bộ bộ tài liệu thiết kế v4.0 (ngày 18/11 cập nhật theo nhận xét chi tiết của GVHD: 6 rủi ro trong Notes – N+1 / báo cáo, toàn vẹn phân tán, ENUM cứng, khóa lạc quan trên hàng đợi, đơn thuốc sai service, `file_url` – và các góp ý về khóa UUID, tách hồ sơ người dùng, giá có lịch sử, tách `pet_visits`, hàng đợi dùng cache). Bản 3.0: góp ý về hóa đơn; 16–17/11: tách thanh toán khỏi quy trình khám.  
 > **Mốc đích đến (Target Milestone):** Ngày 20/11/2026 – Nộp bản thảo Báo cáo hoàn chỉnh + Demo sản phẩm chạy mượt mà để Giảng viên hướng dẫn (GVHD) nghiệm thu duyệt bảo vệ trước Hội đồng.  
 > **Kiến trúc áp dụng:** Microservices Architecture (Java 21, Spring Boot 4.1.1, Spring Cloud 2025.1.2, RabbitMQ, MySQL 8.0, React Vite, Docker Compose).
 
@@ -58,8 +58,8 @@
 | **Tuần 9** | 19/10 – 25/10/2026 | **Sprint 1** | Core Booking & Reception (`auth`, `appointment`, Check-in) + Báo cáo Ch.1,2 | **ĐÃ XONG** |
 | **Tuần 10** | 26/10 – 01/11/2026 | **Sprint 2** | Core Clinical (`clinical-service`: Khám 2 pha, Hàng đợi Lab & CĐHA) | **ĐÃ XONG** |
 | **Tuần 11** | 02/11 – 08/11/2026 | **Sprint 3** | Core Finance & Stock (thu tiền hóa đơn dịch vụ, bán thuốc theo đơn, WebSocket realtime) + Báo cáo Ch.3 | **ĐÃ XONG** |
-| **Tuần 12** | **09/11 – 15/11/2026** | **Sprint 4** | **Cập nhật tài liệu thiết kế v3.0 theo góp ý GVHD, Tích hợp Gateway, Kiểm thử E2E, Nạp Seed Data + Báo cáo Ch.4,5** | **ĐANG LÀM** |
-| **Tuần 13** | 16/11 – 20/11/2026 | **Về đích** | Tổng duyệt, Slide thuyết trình, Quay Video Demo & Nộp GVHD nghiệm thu | **ĐÍCH ĐẾN** |
+| **Tuần 12** | 09/11 – 15/11/2026 | **Sprint 4** | Cập nhật tài liệu thiết kế v3.0 theo góp ý GVHD, Tích hợp Gateway, Kiểm thử E2E, Nạp Seed Data + Báo cáo Ch.4,5 | **ĐÃ XONG** |
+| **Tuần 13** *(Hiện tại)* | **16/11 – 20/11/2026** | **Về đích** | **Cập nhật tài liệu & mã nguồn theo góp ý GVHD lần 2 (phiếu xếp hàng, thu tiền trước – xếp hàng sau) và nhận xét chi tiết 18/11 (tài liệu v4.0: UUID, hồ sơ người dùng, bảng giá, Redis, Outbox, reporting-service)**, Tổng duyệt, Slide thuyết trình, Quay Video Demo & Nộp GVHD nghiệm thu | **ĐANG LÀM** |
 
 ---
 
@@ -135,7 +135,7 @@
     * Đặc tả UC-25 & UC-26 (Tiếp nhận mẫu, Thực hiện cận lâm sàng Lab & CĐHA, Trả kết quả).
     * Đặc tả UC-30, 31, 33 (Hội chẩn kết quả GĐ 2, Kê đơn thuốc điện tử & Chốt đợt khám).
     * Đặc tả UC-34, 35 (Thanh toán hóa đơn dịch vụ & Thu công nợ) và UC-36 (Bán thuốc theo đơn – tùy chọn, trừ kho an toàn).
-    * Xây dựng Ma trận truy vết thực thể nghiệp vụ (CRUD Matrix) và Chỉ mục Quy tắc nghiệp vụ (BR-01 → BR-34; BR-32, BR-33 bổ sung ở v3.0, BR-34 "Gọi số & Đẩy lùi 1 bậc" bổ sung khi rà soát 11/11).
+    * Xây dựng Ma trận truy vết thực thể nghiệp vụ (CRUD Matrix) và Chỉ mục Quy tắc nghiệp vụ (BR-01 → BR-36; BR-32, BR-33 bổ sung ở v3.0, BR-34 "Gọi theo từng dòng" bổ sung khi rà soát 11/11 – cập nhật 13/11, BR-35 "Thu tiền trước – xếp hàng sau" và BR-36 "Hoàn tiền" bổ sung 17/11).
   - **Vũ Hồng Linh:**
     * Đối chiếu các luồng sự kiện (Luồng chính, Luồng rẽ nhánh, Ngoại lệ) trong Use Case với luồng wireframe giao diện.
 - **Kết quả đầu ra (Deliverables):**
@@ -149,16 +149,17 @@
   - **Lưu Minh Hiển:**
     * Thiết kế Sơ đồ trạng thái Lịch hẹn (`APPOINTMENT`: PENDING $\rightarrow$ CONFIRMED $\rightarrow$ CHECKED_IN / CANCELLED / NO_SHOW).
     * Thiết kế Sơ đồ trạng thái Đợt khám cốt lõi (`PET_VISIT`: WAITING $\rightarrow$ IN_PROGRESS $\rightarrow$ WAITING_RESULTS $\rightarrow$ RESULTS_READY $\rightarrow$ IN_PROGRESS $\rightarrow$ WAITING_PAYMENT $\rightarrow$ COMPLETED).
-    * Xây dựng ma trận chuyển đổi trạng thái (T01 → T14, T13 đã bỏ), quy tắc hàng đợi riêng từng Bác sĩ (Q1 → Q5: xếp thứ tự, phân công, gọi số theo từng dòng, khách vắng / quay lại, ca có kết quả lên đầu) và Sơ đồ trạng thái phục vụ của Bác sĩ (`AVAILABLE` / `BUSY`).
+    * Xây dựng ma trận chuyển đổi trạng thái (T01 → T14, T13 đã bỏ), quy tắc hàng đợi (Q1 → Q6: phát phiếu khi thu tiền xong, thứ tự, phân công, gọi số theo từng dòng, khách vắng / quay lại, phiếu ưu tiên cho ca có kết quả) và Sơ đồ trạng thái phục vụ của Bác sĩ (`AVAILABLE` / `BUSY`).
   - **Nguyễn Đức Khởi:**
     * Thiết kế Sơ đồ trạng thái Dịch vụ kỹ thuật (`VISIT_SERVICE_DETAIL`: PENDING $\rightarrow$ IN_PROGRESS $\rightarrow$ COMPLETED / CANCELLED).
-    * Thiết kế Sơ đồ trạng thái Hóa đơn dịch vụ (`SERVICE_INVOICE`: PENDING $\rightarrow$ PAID / CANCELLED – tạo cùng lúc chỉ định, hủy theo dịch vụ).
+    * Thiết kế Sơ đồ trạng thái Hóa đơn dịch vụ (`SERVICE_INVOICE`: PENDING $\rightarrow$ PAID / CANCELLED, PAID $\rightarrow$ REFUNDED – tạo cùng lúc chỉ định, hủy theo dịch vụ, hoàn tiền khi phòng khám không làm được).
+    * *Bổ sung 17/11:* Sơ đồ trạng thái Phiếu xếp hàng (`QUEUE_TICKET`, SM-07: WAITING $\rightarrow$ IN_SERVICE $\rightarrow$ DONE / CANCELLED).
     * Thiết kế Sơ đồ trạng thái Hóa đơn thuốc (`MEDICINE_INVOICE`: PENDING $\rightarrow$ PAID / CANCELLED – chỉ phát sinh khi khách mua thuốc tại phòng khám).
     * *Ghi chú v3.0:* Đơn thuốc (`PRESCRIPTION`) không còn vòng đời trạng thái riêng – đơn thuốc chỉ là chỉ định chuyên môn, không có giá và không có trạng thái.
   - **Vũ Hồng Linh:**
     * Thiết kế bảng màu và nhãn trạng thái (Status Badges) tương ứng trên giao diện (xanh lá, vàng cam, xanh dương, đỏ) đảm bảo tính đồng bộ trực quan.
 - **Kết quả đầu ra (Deliverables):**
-  - File hoàn chỉnh: `THIET_KE_SO_DO_TRANG_THAI_STATE_MACHINE.md` v3.0 (6 máy trạng thái SM-01 → SM-06: Đợt khám, Trạng thái Bác sĩ, Chỉ định dịch vụ, Lịch hẹn, Hóa đơn dịch vụ, Hóa đơn thuốc; kèm sơ đồ điều phối đa thực thể).
+  - File hoàn chỉnh: `THIET_KE_SO_DO_TRANG_THAI_STATE_MACHINE.md` v3.0 (7 máy trạng thái SM-01 → SM-07: Đợt khám, Trạng thái Bác sĩ, Chỉ định dịch vụ, Lịch hẹn, Hóa đơn dịch vụ, Hóa đơn thuốc, Phiếu xếp hàng – SM-07 bổ sung 17/11; kèm sơ đồ điều phối đa thực thể).
 
 ---
 
@@ -173,7 +174,7 @@
     * Thiết kế AD-04: Tiến trình thực hiện cận lâm sàng song song tại 2 phòng Lab & CĐHA (Fork & Join) và cơ chế chống xung đột liên phòng.
     * Thiết kế AD-05: Đón lại ca tái khám GĐ 2, chẩn đoán xác định & kê đơn thuốc.
     * Thiết kế AD-06: Thu tiền hóa đơn dịch vụ (phần A) & Bán thuốc theo đơn – tùy chọn, trừ kho nguyên tử (phần B).
-    * Biên soạn tài liệu Tổng hợp ngoại lệ hệ thống: Phân tích **16 tình huống ngoại lệ (EX-01 → EX-16**: vắng mặt, hủy ca, khách bỏ về giữ công nợ, giảm giá vượt hóa đơn, thiếu kho khi bán thuốc, bán trùng...) và giải pháp xử lý.
+    * Biên soạn tài liệu Tổng hợp ngoại lệ hệ thống: Phân tích **16 tình huống ngoại lệ (EX-01 → EX-16**; *cập nhật 18/11:* 20 tình huống, thêm EX-17 → EX-20 cho lỗi phân tán, giá thay đổi: vắng mặt, hủy ca, khách bỏ về giữ công nợ, giảm giá vượt hóa đơn, thiếu kho khi bán thuốc, bán trùng...) và giải pháp xử lý.
   - **Vũ Hồng Linh:**
     * Thiết kế các hộp thoại thông báo lỗi (Error Modals) và cảnh báo (Alert Banners) tương ứng với 16 ngoại lệ trên giao diện.
 - **Kết quả đầu ra (Deliverables):**
@@ -183,11 +184,11 @@
 ---
 
 ### Tuần 7: Thiết kế CSDL (ERD), Prototype UI/UX & Kiến trúc Microservices (05/10 – 11/10/2026)
-- **Mục tiêu tuần:** Hoàn thành thiết kế CSDL quan hệ (bản v3.0: 25 bảng), bộ mã script SQL, prototype UI/UX Figma và kiến trúc Microservices.
+- **Mục tiêu tuần:** Hoàn thành thiết kế CSDL quan hệ (bản v3.0: 25 bảng; cập nhật 16/11: 27 bảng; v4.0 ngày 18/11: 52 bảng trên 5 CSDL + Redis), bộ mã script SQL, prototype UI/UX Figma và kiến trúc Microservices.
 - **Công việc chi tiết từng thành viên:**
   - **Lưu Minh Hiển:**
-    * Thiết kế Sơ đồ thực thể - mối quan hệ (ERD) chuẩn 3NF gồm **25 bảng** trên 4 CSDL logic (auth 3, appointment 2, clinical 14, billing-pharmacy 6).
-    * Soạn thảo Từ điển dữ liệu chi tiết (Data Dictionary 25 bảng) và danh mục **10 Kiểu Enum** CSDL (+ `LabEvaluation` ở tầng ứng dụng).
+    * Thiết kế Sơ đồ thực thể - mối quan hệ (ERD) chuẩn 3NF gồm **25 bảng** trên 4 CSDL logic (auth 3, appointment 2, clinical 14, billing-pharmacy 6); *cập nhật 16/11:* **27 bảng** (clinical 16, thêm `queue_tickets`, `queue_ticket_items`; `services.requires_prepayment`; bỏ `queue_order`).
+    * Soạn thảo Từ điển dữ liệu chi tiết (Data Dictionary, nay 27 bảng) và danh mục **10 Kiểu Enum** CSDL (nay 12, thêm `QueueType`, `TicketStatus`; + `LabEvaluation` ở tầng ứng dụng).
     * Viết mã nguồn CSDL `schema_init.sql`: 25 khóa ngoại nội bộ, 2 VIEW tính tiền (`v_service_invoice_amounts`, `v_medicine_invoice_amounts`), các bảng audit trail, `service_invoices` (1 hóa đơn / dịch vụ), `medicine_invoices` + `medicine_invoice_items` (hóa đơn thuốc tùy chọn); bỏ `invoices`, `invoice_items` và các cột tổng tiền dẫn xuất.
   - **Nguyễn Đức Khởi:**
     * Nghiên cứu và thiết kế Kiến trúc hệ thống Microservices: Phân rã 5 service nghiệp vụ + 2 service hạ tầng (Gateway, Eureka), cơ chế giao tiếp OpenFeign / RabbitMQ.
@@ -206,7 +207,7 @@
 - **Công việc chi tiết từng thành viên:**
   - **Lưu Minh Hiển:**
     * Thiết kế **Sơ đồ Lớp chi tiết (Class Diagram)**: Biểu diễn các Entity, Repository, Service và Controller của từng phân hệ.
-    * Thiết kế **Sơ đồ Tuần tự (Sequence Diagram)**: Cho 3 luồng phức tạp nhất: (1) Đặt lịch & Thuật toán tính slot động; (2) Chỉ định cận lâm sàng & Xử lý song song; (3) Ca có kết quả lên đầu hàng đợi Bác sĩ & Đón ca GĐ 2.
+    * Thiết kế **Sơ đồ Tuần tự (Sequence Diagram)**: Cho 3 luồng phức tạp nhất: (1) Đặt lịch & Thuật toán tính slot động; (2) Chỉ định cận lâm sàng & Xử lý song song; (3) Ca có kết quả nhận phiếu ưu tiên vào hàng đợi Bác sĩ & Đón ca GĐ 2.
     * Khởi tạo Git Repository chung, thiết lập quy chuẩn commit và nhánh phát triển (`main`, `develop`, `feature/*`).
   - **Nguyễn Đức Khởi:**
     * Viết file `docker-compose.yml`: Cấu hình container MySQL 8.0 (khởi tạo 4 logical database), RabbitMQ Server (kèm Management UI trên port `15672`), cấu hình Docker Volume lưu ảnh chẩn đoán.
@@ -256,8 +257,8 @@
   - **Lưu Minh Hiển:**
     * Phát triển phân hệ Bác sĩ khám lâm sàng trong `clinical-service` (:8083):
       - Bác sĩ bấm "Bắt đầu khám" GĐ 1: Ghi nhận sinh hiệu, khám thực thể, tra cứu lịch sử bệnh án.
-      - Ra chỉ định dịch vụ cận lâm sàng: Chọn xét nghiệm máu, siêu âm, chụp X-quang $\rightarrow$ **mỗi dịch vụ sinh 1 hóa đơn dịch vụ `PENDING` trong cùng giao dịch** $\rightarrow$ đẩy vào 2 hàng đợi độc lập $\rightarrow$ Chuyển đợt khám sang `WAITING_RESULTS` $\rightarrow$ Giải phóng Bác sĩ về `AVAILABLE`.
-      - Nghiệp vụ GĐ 2: Khi ca có kết quả (`RESULTS_READY`), ca **tự lên đầu hàng đợi của Bác sĩ** (chỉ sau ca cấp cứu), Bác sĩ "Gọi số tiếp theo" rồi "Bắt đầu GĐ 2", tổng hợp bệnh án, chẩn đoán xác định, kê đơn thuốc và chốt ca khám.
+      - Ra chỉ định dịch vụ cận lâm sàng: Chọn xét nghiệm máu, siêu âm, chụp X-quang $\rightarrow$ **mỗi dịch vụ sinh 1 hóa đơn dịch vụ `PENDING` trong cùng giao dịch** $\rightarrow$ khách nộp tiền xong mới vào 2 hàng đợi độc lập (cập nhật 17/11) $\rightarrow$ Chuyển đợt khám sang `WAITING_RESULTS` $\rightarrow$ Giải phóng Bác sĩ về `AVAILABLE`.
+      - Nghiệp vụ GĐ 2: Khi ca có kết quả (`RESULTS_READY`), ca **được phát phiếu ưu tiên vào hàng đợi của Bác sĩ** (chỉ sau ca cấp cứu, cập nhật 17/11), Bác sĩ "Gọi số tiếp theo" rồi "Bắt đầu GĐ 2", tổng hợp bệnh án, chẩn đoán xác định, kê đơn thuốc và chốt ca khám.
   - **Nguyễn Đức Khởi:**
     * Phát triển phân hệ Cận lâm sàng trong `clinical-service` (:8083):
       - Hàng đợi Phòng Xét nghiệm (Lab Queue): Tiếp nhận ca, lấy mẫu máu ("Đã lấy mẫu"), nhập chỉ số đo lường thực tế, **tự động đối chiếu tham chiếu loài (Chó/Mèo)**, lưu snapshot `min/max_value_snapshot` vào `lab_test_results` (nhãn Thấp / Chuẩn / Cao tính khi hiển thị).
@@ -278,7 +279,7 @@
 - **Công việc chi tiết từng thành viên:**
   - **Lưu Minh Hiển:**
     * Phát triển **thu tiền hóa đơn dịch vụ** trong `clinical-service` (:8083):
-      - Hóa đơn dịch vụ (`service_invoices`) đã được tạo **ngay lúc Bác sĩ chỉ định** (kể cả phí khám tạo lúc "Bắt đầu khám"), nằm trong `clinical-service`; chốt ca không lập thêm hóa đơn.
+      - Hóa đơn dịch vụ (`service_invoices`) đã được tạo **ngay lúc Bác sĩ chỉ định** (phí khám: lúc tiếp đón – cập nhật 17/11; phí khám, XN, CĐHA thu trước rồi mới phát phiếu xếp hàng), nằm trong `clinical-service`; chốt ca không lập thêm hóa đơn.
       - Bảng kê, giảm giá từng hóa đơn (≤ số tiền của hóa đơn đó), xác nhận thanh toán; khi mọi hóa đơn dịch vụ `PAID` / `CANCELLED` thì đợt khám `COMPLETED` **trong cùng giao dịch cục bộ** (không cần sự kiện liên service); thu công nợ cho ca khách bỏ về.
       - Sau commit phát `VisitCompletedEvent` (`clinical-service` → `notification-service`) để gửi phiếu thu điện tử.
     * Phát triển `billing-pharmacy-service` (:8084):
@@ -328,14 +329,20 @@
 ---
 
 ### Tuần 13: Tổng duyệt, Slide Thuyết trình, Quay Video Demo & Nộp Nghiệm thu GVHD (16/11 – 20/11/2026)
-- **Mục tiêu tuần:** Hoàn thành Slide thuyết trình, video demo dự phòng, diễn tập bảo vệ thử và **nộp sản phẩm cho GVHD nghiệm thu đúng hạn 20/11/2026**.
+- **Mục tiêu tuần:** Cập nhật tài liệu và mã nguồn theo góp ý GVHD lần 2, hoàn thành Slide thuyết trình, video demo dự phòng, diễn tập bảo vệ thử và **nộp sản phẩm cho GVHD nghiệm thu đúng hạn 20/11/2026**.
 - **Công việc chi tiết từng ngày:**
-  - **Ngày 16/11 – 17/11 (Thiết kế Slide & Quay Video):**
+  - **Ngày 16/11 – 17/11 (Cập nhật theo góp ý GVHD lần 2):**
+    * Hiển, Khởi cập nhật 15 tài liệu thiết kế theo nghiệp vụ mới: khách **nộp phí khám xong mới được phát phiếu vào hàng đợi Bác sĩ**; dịch vụ làm tại phòng (tiêm vắc-xin…) làm ngay, thu khi chốt ca; **Xét nghiệm / CĐHA nộp tiền xong mới được phát phiếu vào hàng đợi phòng**; tách hàng đợi khỏi hồ sơ khám thành bảng `queue_tickets` (+ `queue_ticket_items`); phí khám không hoàn, chỉ hoàn khi phòng khám không làm được dịch vụ đã thu.
+    * Hiển, Khởi điều chỉnh `clinical-service` (TicketIssuer, QueueTicketService, API thu ngân 3 mục); Linh điều chỉnh màn hình Thu ngân, hàng đợi Bác sĩ / Lab / CĐHA theo phiếu.
+  - **Ngày 18/11 (Cập nhật theo nhận xét chi tiết của GVHD – tài liệu v4.0):**
+    * Khởi phân tích Notes của GVHD (6 rủi ro) và các góp ý bổ sung, cập nhật 15 tài liệu lên v4.0: khóa UUIDv7 (`BINARY(16)`), `BIGINT` chỉ cho dữ liệu nhiều – đơn giản; tách `users` / `user_roles` / `user_profiles` / `staff_profiles` / `veterinarian_profiles` / `pet_owner_profiles`; bảng danh mục thay ENUM cứng; dịch vụ và thuốc tách thông tin – giá (`service_prices`, `medicine_prices` có lịch sử) – tồn kho (`medicine_stocks`); tách `pet_visits` / `vital_signs` / `medical_records`; đơn thuốc chuyển về `clinical-service`, hóa đơn thuốc nháp tạo từ `PrescriptionCreatedEvent`, bỏ liên kết `prescription_item` ↔ `medicine_invoice_item`; hàng đợi chuyển sang **Redis** (MySQL chỉ lưu lịch sử phiếu); **Transactional Outbox** + consumer idempotent; thêm **`reporting-service`** (CQRS) cho báo cáo; tệp ảnh lưu `file_key` + URL ký tạm. Lược đồ: **52 bảng, 40 khóa ngoại, 4 VIEW**; thêm EX-17 → EX-20, NFR-09, NFR-10, BR-37 → BR-41.
+    * Việc còn lại sau khi GVHD xác nhận: cập nhật mã nguồn theo lược đồ v4.0 (Lộ trình Task 1.2, 1.3.5, 2.4, 3.x, 4.x, 4.5) và Chương 3 Báo cáo.
+  - **Ngày 17/11 – 18/11 (Thiết kế Slide & Quay Video):**
     * Linh thiết kế bộ **Slide thuyết trình PowerPoint / Canva** ấn tượng, chuyên nghiệp (khoảng 25–30 slide): Nêu bật vấn đề thực tế, quy trình 2 pha, kiến trúc Microservices, công nghệ RabbitMQ/Docker và kết quả đạt được.
     * Khởi quay 01 video clip quay màn hình demo toàn bộ luồng nghiệp vụ dài 5–7 phút (để làm tư liệu dự phòng khi bảo vệ nếu máy tính hoặc mạng gặp sự cố).
   - **Ngày 18/11 – 19/11 (Tổng duyệt & Diễn tập bảo vệ thử - Dry-Run):**
     * Cả nhóm tổ chức diễn tập thuyết trình thử:
-      - Hiển: Trình bày Mở đầu, Nghiệp vụ cốt lõi, Quy trình 2 pha và Hàng đợi riêng từng Bác sĩ.
+      - Hiển: Trình bày Mở đầu, Nghiệp vụ cốt lõi, Quy trình 2 pha, Thu tiền trước – xếp hàng sau và Hàng đợi riêng từng Bác sĩ.
       - Khởi: Trình bày Kiến trúc Microservices, RabbitMQ, CSDL và xử lý giao dịch.
       - Linh: Trình bày Giao diện UI/UX và trực tiếp thao tác demo phần mềm trực quan.
     * Cùng nhau ôn luyện và trả lời các câu hỏi phản biện trong phần **Defense Q&A** của tài liệu kiến trúc.
@@ -385,14 +392,16 @@ gantt
     Viết Báo cáo Chương 3 (Hiển + Khởi) :done, t11_4, 2026-11-04, 2026-11-08
 
     section TUẦN 12: SPRINT 4 - INTEGRATION & REPORT (09/11 - 15/11)
-    Cập nhật tài liệu thiết kế v3.0 (Hiển + Khởi) :active, t12_0, 2026-11-09, 2026-11-11
-    Tích hợp Gateway & Kiểm thử E2E (Nhóm) :active, t12_1, 2026-11-09, 2026-11-13
-    Nạp Seed Data & Đóng gói Docker (Khởi) :t12_2, 2026-11-11, 2026-11-14
-    Viết Báo cáo Chương 4 · 5 & Soát lỗi (Nhóm) :active, t12_3, 2026-11-10, 2026-11-15
+    Cập nhật tài liệu thiết kế v3.0 (Hiển + Khởi) :done, t12_0, 2026-11-09, 2026-11-11
+    Tích hợp Gateway & Kiểm thử E2E (Nhóm) :done, t12_1, 2026-11-09, 2026-11-13
+    Nạp Seed Data & Đóng gói Docker (Khởi) :done, t12_2, 2026-11-11, 2026-11-14
+    Viết Báo cáo Chương 4 · 5 & Soát lỗi (Nhóm) :done, t12_3, 2026-11-10, 2026-11-15
 
     section TUẦN 13: VỀ ĐÍCH & NGHIỆM THU GVHD (16/11 - 20/11)
-    Thiết kế Slide Thuyết trình (Linh) :t13_1, 2026-11-16, 2026-11-18
-    Quay Video Clip Demo dự phòng (Khởi) :t13_2, 2026-11-16, 2026-11-17
+    Cập nhật theo góp ý GVHD lần 2 - phiếu xếp hàng (Hiển + Khởi) :done, t13_0, 2026-11-16, 2026-11-17
+    Tài liệu v4.0 theo nhận xét chi tiết GVHD (Khởi) :active, t13_v4, 2026-11-18, 2026-11-19
+    Thiết kế Slide Thuyết trình (Linh) :active, t13_1, 2026-11-16, 2026-11-18
+    Quay Video Clip Demo dự phòng (Khởi) :t13_2, 2026-11-17, 2026-11-18
     Diễn tập Thuyết trình Thử (Cả nhóm) :t13_3, 2026-11-18, 2026-11-19
     NỘP BÁO CÁO & DEMO CHO GVHD NGHIỆM THU :milestone, m_end, 2026-11-20, 0d
 ```
@@ -430,3 +439,5 @@ gantt
 | Mục 4 (Gantt) | Tên task chứa dấu `:` ("T1: …", "clinical-service: …") làm sơ đồ không hiển thị | Đổi thành dấu `-`; sơ đồ hiển thị bình thường | Lỗi cú pháp Mermaid |
 | Mục 2, Tuần 5 (rà soát 10/11) | "State Machine 5 thực thể" | 6 thực thể (SM-01 → SM-06) | Khớp tài liệu State Machine v3.0 |
 | Mục 2, Tuần 3–6, 9–12 (rà soát 11/11) | Hàng đợi sảnh chung; phân công chỉ khi Bác sĩ rảnh; Khóa ưu tiên `AVAILABLE_PRIORITY_CALLBACK`; vắng mặt → tạm hoãn → gọi lại; BR-01 → BR-33 | Hàng đợi riêng từng Bác sĩ; Lab & CĐHA tự vào hàng đợi khi chỉ định; "Gọi số tiếp theo" / "Đẩy lùi 1 bậc"; ca có kết quả lên đầu hàng đợi Bác sĩ; BR-01 → BR-34 | Khớp yêu cầu mới về hàng đợi (State Machine §2.4, BR-34) |
+| Đầu tài liệu, Mục 2, Tuần 4, 5, 7, 13, Gantt (cập nhật 17/11) | Hiện tại 10/11 (Tuần 12); BR-01 → BR-34; Q1 → Q5; 6 State Machine; 25 bảng, 10 enum; Tuần 13 chỉ tổng duyệt | Hiện tại 17/11 (Tuần 13), Tuần 12 "ĐÃ XONG"; BR-01 → BR-36; Q1 → Q6; 7 State Machine (thêm SM-07 phiếu xếp hàng); 27 bảng, 12 enum; Tuần 13 thêm hạng mục cập nhật tài liệu & mã nguồn theo góp ý GVHD lần 2 | Góp ý GVHD: tách quy trình thanh toán khỏi quy trình khám, tách dữ liệu hàng đợi khỏi hồ sơ khám |
+| Đầu tài liệu, Mục 2, Tuần 6, 7, 13, Gantt (cập nhật 18/11) | Hiện tại 17/11; phiên bản 3.0; 27 bảng, 16 ngoại lệ | Hiện tại 18/11; phiên bản 4.0; thêm mục "Ngày 18/11" (tài liệu v4.0: 52 bảng, 20 ngoại lệ, Redis, Outbox, reporting-service) và dòng Gantt `t13_v4`; ghi chú cập nhật mã nguồn và Chương 3 sau khi GVHD xác nhận | Nhận xét chi tiết của GVHD ngày 18/11 |

@@ -1,10 +1,11 @@
 # QUY CHUẨN THIẾT KẾ VÀ LẬP TRÌNH BACKEND (JAVA 21 & SPRING BOOT 4.1.1)
 ## HỆ THỐNG QUẢN LÝ PHÒNG KHÁM THÚ Y (MICROSERVICES ARCHITECTURE)
-### PHIÊN BẢN 3.0 (PRODUCTION-GRADE STANDARDS – đồng bộ lược đồ CSDL v3.0 và Kiến trúc v3.0)
+### PHIÊN BẢN 4.0 (PRODUCTION-GRADE STANDARDS – đồng bộ lược đồ CSDL v4.0 và Kiến trúc v4.0, 18/11/2026)
 
 > **Tài liệu quy chuẩn kỹ thuật bắt buộc (Mandatory Engineering Standards)**  
 > **Áp dụng cho:** Toàn bộ thành viên đội ngũ phát triển Backend (Lưu Minh Hiển, Nguyễn Đức Khởi, Vũ Hồng Linh).  
-> **Mục tiêu:** Đồng bộ hóa 100% phong cách lập trình (Code Style), kiến trúc phân tầng, định dạng API, quản lý giao dịch CSDL, an toàn concurrency kho dược, xử lý ngoại lệ và giao tiếp phân tán liên Microservice.
+> **Mục tiêu:** Đồng bộ hóa 100% phong cách lập trình (Code Style), kiến trúc phân tầng, định dạng API, quản lý giao dịch CSDL, an toàn concurrency kho dược, xử lý ngoại lệ và giao tiếp phân tán liên Microservice.  
+> **Điểm mới v4.0:** khóa UUIDv7 (`java.util.UUID`), Transactional Outbox + consumer idempotent (Chương 9), hàng đợi trên Redis bằng Lua script (mục 9.3), bảng giá có lịch sử (`PriceBook`), hóa đơn thuốc nháp từ `PrescriptionCreatedEvent` (8.2), `reporting-service`, trạng thái lưu `VARCHAR` + enum Java, header `X-User-Roles` nhiều vai trò, ảnh lưu `file_key`.
 
 ---
 
@@ -37,7 +38,9 @@ Tất cả các dịch vụ Backend bắt buộc phải chạy trên cùng một
 | **Service Discovery** | **Spring Cloud Netflix Eureka** | Module `service-registry` (:8761). |
 | **API Gateway** | **Spring Cloud Gateway** | Module `api-gateway` (:8080) - **Nền tảng Reactive (WebFlux)**. |
 | **Data Persistence** | **Spring Data JPA / Hibernate** | Jakarta Persistence API (Jakarta EE). Cấu hình `open-in-view = false`. |
-| **Database Engine** | **MySQL 8.0+** | Mô hình Database-per-Service: 4 logical schemas độc lập. |
+| **Database Engine** | **MySQL 8.0+** | Database-per-Service: 5 logical schemas (auth, appointment, clinical, billing_pharmacy, reporting). Khóa thực thể `BINARY(16)` (UUIDv7). |
+| **Cache / Hàng đợi** | **Redis 7 + Spring Data Redis** | Chỉ `clinical-service`: hàng đợi phiếu (Sorted Set, Hash, Lua script). Bật AOF. |
+| **Khả năng chịu lỗi** | **Resilience4j (Spring Cloud CircuitBreaker)** | Circuit Breaker + timeout cho mọi Feign client. |
 | **Message Broker** | **RabbitMQ (AMQP 0-9-1)** | Topic Exchange `clinic.events` (:5672) với JSON Converter. |
 | **Boilerplate Code** | **Project Lombok** | Sinh Getters, Setters, Builders tại compile-time. |
 | **Object Mapper** | **MapStruct 1.5+** | Sinh code chuyển đổi Entity $\leftrightarrow$ DTO tại compile-time (chế độ cảnh báo `unmappedTargetPolicy = WARN`). |
@@ -72,12 +75,15 @@ vetclinic-backend/
 ├── clinical-service/                     # Thú cưng, khám lâm sàng 2 pha, hóa đơn dịch vụ (:8083) - Dùng spring-boot-starter-web
 │   ├── pom.xml
 │   └── src/main/java/com/vetclinic/clinical/
-├── billing-pharmacy-service/             # Kê đơn, bán thuốc (hóa đơn thuốc) & kho dược (:8084) - Dùng spring-boot-starter-web
+├── billing-pharmacy-service/             # Danh mục thuốc, giá, tồn kho, hóa đơn thuốc (:8084) - Dùng spring-boot-starter-web
 │   ├── pom.xml
 │   └── src/main/java/com/vetclinic/billing/
-└── notification-service/                 # Dịch vụ WebSocket & email (:8085) - Dùng spring-boot-starter-web
+├── notification-service/                 # Dịch vụ WebSocket & email (:8085) - Dùng spring-boot-starter-web
+│   ├── pom.xml
+│   └── src/main/java/com/vetclinic/notification/
+└── reporting-service/                    # Mô hình đọc cho báo cáo, chỉ ghi bằng sự kiện (:8086) - Dùng spring-boot-starter-web
     ├── pom.xml
-    └── src/main/java/com/vetclinic/notification/
+    └── src/main/java/com/vetclinic/reporting/
 ```
 
 ### 2.2. Quy tắc nạp cấu hình dùng chung từ `common-library` (Auto-Configuration)
@@ -144,8 +150,10 @@ com.vetclinic.<servicename>/
 │   └── response/            # Response DTO gửi về cho Client
 ├── mapper/                  # Chuyển đổi dữ liệu MapStruct (@Mapper)
 ├── client/                  # OpenFeign Interfaces gọi sang Microservice khác (@FeignClient)
-├── event/                   # Event DTOs cụ thể & Producer/Consumer RabbitMQ
-└── constant/                # Enum nội bộ, Hằng số nghiệp vụ riêng của service
+├── event/                   # Event DTOs cụ thể & Consumer RabbitMQ (@RabbitListener)
+├── outbox/                  # OutboxEvent entity, OutboxWriter, OutboxRelay (mọi service phát sự kiện) – Chương 9
+├── queue/                   # Chỉ clinical-service: QueueRedisRepository, Lua scripts, QueueIssuerListener, QueueRebuildJob – mục 9.3
+└── constant/                # Enum nội bộ (lưu VARCHAR), Hằng số nghiệp vụ riêng của service
 ```
 
 ---
@@ -156,23 +164,26 @@ com.vetclinic.<servicename>/
 - **Java Platform:** Java 21 LTS. DTOs có thể sử dụng `record` (bất biến) hoặc class thường với Lombok.
 - **Tiền tệ & Số thực tài chính:** **Bắt buộc dùng `BigDecimal`** (ví dụ: `unitPrice`, `vatRate`, `discountAmount`; tổng tiền không lưu mà tính khi cần). Tuyệt đối cấm dùng `double` hoặc `float` gây sai số làm tròn số tiền.
 - **Thời gian (Timestamp):** Dùng `Instant` cho thời điểm giao dịch (`checkedInAt`, `paidAt`, `createdAt`). Lưu trữ dạng UTC trong Database; tầng hiển thị Frontend hoặc DTO Response chuyển đổi sang múi giờ Việt Nam (`Asia/Ho_Chi_Minh` - GMT+7).
-- **Hằng số & Enum:** `UPPER_SNAKE_CASE` (ví dụ: `WAITING_RESULTS`, `EXPORT_SALE`). Khớp 100% với file `DANH_SACH_KIEU_ENUM_HE_THONG.md` v3.0 (10 enum CSDL + `LabEvaluation` chỉ dùng ở tầng ứng dụng; không còn `PrescriptionStatus`, `InvoiceItemType`).
+- **Hằng số & Enum:** `UPPER_SNAKE_CASE` (ví dụ: `WAITING_RESULTS`, `EXPORT_SALE`). Khớp 100% với `DANH_SACH_KIEU_ENUM_HE_THONG.md` v4.0: **18 enum Java lưu `VARCHAR`** (`@Enumerated(EnumType.STRING)`, cột `length = 20/30`) + `LabEvaluation` chỉ ở ứng dụng. **Không dùng kiểu ENUM của MySQL.** Vai trò, nhóm dịch vụ, loài, nhóm thuốc là **bảng danh mục** (entity `Role`, `ServiceCategory`, `Species`, `MedicineCategory`), code tham chiếu bằng `code` (hằng trong `RoleCodes`, `CategoryCodes`), không tham chiếu bằng `id`.
+- **Khóa chính & tham chiếu (v4.0):** thực thể nghiệp vụ dùng `java.util.UUID` sinh bằng `@UuidGenerator(style = UuidGenerator.Style.VERSION_7)`, cột `BINARY(16)`; dữ liệu chỉ thêm dùng `Long` + `IDENTITY`; danh mục dùng `Short` + `IDENTITY`. Mọi id trong URL, DTO, sự kiện là chuỗi UUID 36 ký tự (`@PathVariable UUID id`). Khóa ngoại logic sang service khác khai báo là `UUID` thuần (không `@ManyToOne`).
+- **Snapshot:** cột `*Snapshot` (ví dụ `doctorNameSnapshot`) chỉ được ghi lúc tạo và bởi listener sự kiện cập nhật tên; không đọc snapshot để ra quyết định nghiệp vụ (kiểm tra Bác sĩ còn `ACTIVE` phải gọi Feign).
 
 ### 3.2. Quy chuẩn Thiết kế RESTful API URIs & Prefix Thống nhất
 Nhằm đồng bộ hoàn toàn giữa **Spring Cloud Gateway**, **Controller** và **OpenFeign Clients**, toàn bộ URI tuân thủ quy tắc tiền tố:
 
 | Microservice | Prefix URI qua Gateway & Controller | Ví dụ Endpoint CRUD | Ví dụ Action Endpoint (Động từ) |
 | :--- | :--- | :--- | :--- |
-| **`auth-service`** | `/api/v1/auth/**` | `GET /api/v1/auth/users` | `POST /api/v1/auth/login`<br>`POST /api/v1/auth/refresh` |
+| **`auth-service`** | `/api/v1/auth/**`<br>`/api/v1/users/**`<br>`/api/v1/staff/**`<br>`/api/v1/roles/**` | `GET /api/v1/users/me` (tài khoản + hồ sơ chung)<br>`GET /api/v1/staff`, `GET /api/v1/staff/{id}` (hồ sơ nhân sự + hồ sơ chuyên môn)<br>`GET /api/v1/staff/doctors` (danh sách Bác sĩ kèm chuyên khoa, cho trang đặt lịch)<br>`GET /api/v1/roles` | `POST /api/v1/auth/login`, `/refresh`, `/logout`, `/register` (khách tự đăng ký)<br>`POST /api/v1/staff` (tạo tài khoản + `user_profiles` + `staff_profiles` [+ `veterinarian_profiles`] trong 1 giao dịch)<br>`PUT /api/v1/users/{id}/profile`, `PUT /api/v1/staff/{id}/vet-profile`<br>`PUT /api/v1/users/{id}/roles`<br>`POST /api/v1/users/{id}/lock`, `/unlock`, `/deactivate` (xóa mềm) |
 | **`appointment-service`** | `/api/v1/appointments/**` | `GET /api/v1/appointments`<br>`GET /api/v1/appointments/slots?date=` | `POST /api/v1/appointments/{id}/confirm`<br>`POST /api/v1/appointments/{id}/cancel` |
-| **`clinical-service`** | `/api/v1/clinical/**`<br>`/api/v1/pets/**`<br>`/api/v1/species/**` | `GET /api/v1/clinical/pet-visits`<br>`GET /api/v1/clinical/pet-visits/queue` (bảng điều phối)<br>`GET /api/v1/clinical/pet-visits/my-queue` (hàng đợi Bác sĩ)<br>`GET /api/v1/clinical/lab-queue`, `/imaging-queue` (hàng đợi XN / CĐHA)<br>`GET /api/v1/clinical/doctors/status`<br>`GET /api/v1/clinical/pet-visits/{id}/service-invoices`<br>`GET /api/v1/pets/{id}` | `POST /api/v1/clinical/pet-visits/check-in`<br>`POST /api/v1/clinical/pet-visits/{id}/assign-doctor`, `/unassign-doctor`<br>`POST /api/v1/clinical/pet-visits/call-next`<br>`POST /api/v1/clinical/lab-queue/call-next`, `/imaging-queue/call-next`<br>`POST /api/v1/clinical/pet-visits/{id}/call`<br>`POST /api/v1/clinical/service-details/{id}/call`<br>`POST /api/v1/clinical/pet-visits/{id}/start-exam`<br>`POST /api/v1/clinical/pet-visits/{id}/start-phase2`<br>`POST /api/v1/clinical/pet-visits/{id}/close-visit`<br>`POST /api/v1/clinical/pet-visits/{id}/reopen`<br>`POST /api/v1/clinical/service-invoices/{id}/discount`<br>`POST /api/v1/clinical/pet-visits/{id}/service-invoices/confirm-payment` |
-| **`billing-pharmacy-service`** | `/api/v1/pharmacy/**`<br>`/api/v1/billing/**` | `GET /api/v1/pharmacy/medicines`<br>`GET /api/v1/pharmacy/prescriptions/{id}`<br>`GET /api/v1/billing/medicine-invoices/{id}` | `POST /api/v1/pharmacy/prescriptions/{id}/medicine-invoices` (lập hóa đơn thuốc)<br>`PUT /api/v1/billing/medicine-invoices/{id}/items` (sửa dòng khi `PENDING`)<br>`POST /api/v1/billing/medicine-invoices/{id}/confirm-payment` (thu tiền + trừ kho)<br>`POST /api/v1/billing/medicine-invoices/{id}/cancel` |
+| **`clinical-service`** | `/api/v1/clinical/**`<br>`/api/v1/pets/**`<br>`/api/v1/species/**`<br>`/api/v1/catalog/**` | `GET /api/v1/clinical/pet-visits`<br>`GET /api/v1/clinical/pet-visits/queue` (bảng điều phối, đọc Redis)<br>`GET /api/v1/clinical/pet-visits/my-queue` (hàng đợi Bác sĩ, đọc Redis)<br>`GET /api/v1/clinical/lab-queue`, `/imaging-queue`<br>`GET /api/v1/clinical/cashier/pending?section=EXAM_FEE\|PARACLINIC\|FINAL`<br>`GET /api/v1/clinical/doctors/status`<br>`GET /api/v1/clinical/pet-visits/{id}/medical-record`, `/vital-signs`, `/prescription`, `/service-invoices`<br>`GET /api/v1/catalog/services?categoryCode=` (kèm giá đang áp dụng)<br>`GET /api/v1/catalog/services/{id}/prices` (lịch sử giá)<br>`GET /api/v1/clinical/imaging-attachments/{id}/url` (URL ký tạm 1 giờ)<br>`GET /api/v1/pets/{id}` | `POST /api/v1/clinical/pet-visits/check-in`<br>`POST /api/v1/clinical/pet-visits/{id}/assign-doctor`, `/unassign-doctor`<br>`POST /api/v1/clinical/queue-tickets/call-next?queueType=DOCTOR\|LABORATORY\|IMAGING`<br>`POST /api/v1/clinical/queue-tickets/{ticketId}/call` (Redis: tăng `calledCount`)<br>`POST /api/v1/clinical/queue-tickets/{ticketId}/start` (phòng XN / CĐHA)<br>`POST /api/v1/clinical/pet-visits/{id}/start-exam`, `/start-phase2`, `/close-visit`, `/reopen`<br>`POST /api/v1/clinical/pet-visits/{id}/vital-signs` (thêm một lần đo)<br>`PUT /api/v1/clinical/pet-visits/{id}/medical-record` (`@Version`)<br>`PUT /api/v1/clinical/pet-visits/{id}/prescription` (lưu cả đơn; chỉ khi ca `IN_PROGRESS`)<br>`POST /api/v1/clinical/service-details/{id}/cancel`<br>`POST /api/v1/clinical/service-invoices/{id}/discount`<br>`POST /api/v1/clinical/pet-visits/{id}/service-invoices/confirm-payment`<br>`POST /api/v1/catalog/services/{id}/prices` (ADMIN đổi giá: đóng dòng cũ + thêm dòng mới) |
+| **`billing-pharmacy-service`** | `/api/v1/pharmacy/**`<br>`/api/v1/billing/**` | `GET /api/v1/pharmacy/medicines` (kèm thành phần, quy cách, giá hiện hành, tồn)<br>`GET /api/v1/pharmacy/medicines/{id}/prices` (lịch sử giá)<br>`GET /api/v1/billing/medicine-invoices?visitId=` (hóa đơn nháp của ca)<br>`GET /api/v1/billing/medicine-invoices/{id}` | `POST /api/v1/pharmacy/medicines` (thuốc + thành phần + giá đầu + dòng tồn = 0)<br>`POST /api/v1/pharmacy/medicines/{id}/prices` (ADMIN đổi giá)<br>`POST /api/v1/pharmacy/medicines/{id}/import`, `/adjust` (nhập / cân chỉnh kho)<br>`PUT /api/v1/billing/medicine-invoices/{id}/items` (sửa số lượng / bỏ dòng khi `PENDING`)<br>`POST /api/v1/billing/medicine-invoices/{id}/confirm-payment` (thu tiền + trừ kho)<br>`POST /api/v1/billing/medicine-invoices/{id}/cancel` (khách mua ngoài). Hóa đơn thuốc **không có API tạo**: chỉ sinh từ `PrescriptionCreatedEvent`. |
 | **`notification-service`** | `/api/v1/notifications/**`<br>`/ws/**` | `GET /api/v1/notifications` (thông báo của người dùng hiện tại) | `POST /api/v1/notifications/{id}/read`. Không có API gửi email công khai: Email / WebSocket chỉ được kích hoạt bởi sự kiện RabbitMQ. |
+| **`reporting-service`** | `/api/v1/reports/**` | `GET /api/v1/reports/revenue/daily?from=&to=&type=SERVICE\|MEDICINE`<br>`GET /api/v1/reports/revenue/by-category?month=`<br>`GET /api/v1/reports/doctors/performance?from=&to=`<br>`GET /api/v1/reports/visits/summary?date=` | Không có API ghi (chỉ listener sự kiện). Chỉ vai trò `ADMIN`. |
 
 > [!NOTE]
 > **Quy tắc về Action Endpoint:** Đối với các thao tác chuyển đổi trạng thái nghiệp vụ (bắt đầu khám, chốt ca, mở lại hồ sơ, xác nhận thanh toán, bán thuốc), cho phép dùng động từ ở cuối URI nhưng **bắt buộc dùng phương thức `POST`**, và tầng Service phải chống bấm trùng (kiểm tra trạng thái nguồn + `@Version`).
 >
-> **Endpoint nội bộ:** lời gọi Feign giữa các service dùng tiền tố `/internal/**` (ví dụ `GET /internal/pet-visits/{id}/summary`). Gateway **không định tuyến** tiền tố này ra ngoài. Danh mục lời gọi Feign theo `THIET_KE_KIEN_TRUC_MICROSERVICES.md` mục 5.1.
+> **Endpoint nội bộ:** lời gọi Feign giữa các service dùng tiền tố `/internal/**` (ví dụ `GET /internal/medicines?keyword=`). Gateway **không định tuyến** tiền tố này ra ngoài. Danh mục lời gọi Feign theo `THIET_KE_KIEN_TRUC_MICROSERVICES.md` mục 5.1.
 
 
 ---
@@ -261,6 +272,8 @@ public class PageResponse<T> {
 ## CHƯƠNG 5: CƠ CHẾ BẮT LỖI & NGOẠI LỆ TẬP TRUNG (GLOBAL EXCEPTION HANDLING)
 
 ### 5.1. Danh mục Mã lỗi `ErrorCode` Đầy đủ
+> v4.0: **49 mã** (41 mã cũ + 8 mã mới:  `AUTH_1107`, `AUTH_1108`, `CLIN_1315`–`CLIN_1318`, `BILL_1410`, `PHARM_1412`; `PHARM_1407 PRESCRIPTION_ALREADY_INVOICED` nay báo khi nhận trùng `PrescriptionCreatedEvent` và chỉ ghi log). Mã `PHARM_1404`, `PHARM_1411` giữ số cũ nhưng do `clinical-service` trả về vì đơn thuốc đã chuyển sang đây.
+
 ```java
 package com.vetclinic.common.exception;
 
@@ -284,6 +297,8 @@ public enum ErrorCode {
     REFRESH_TOKEN_NOT_FOUND("AUTH_1104", "Không tìm thấy phiên Refresh Token", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("AUTH_1105", "Refresh Token đã bị thu hồi hoặc đã qua sử dụng (Cảnh báo bảo mật)", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_EXPIRED("AUTH_1106", "Refresh Token đã hết hạn, vui lòng đăng nhập lại", HttpStatus.UNAUTHORIZED),
+    ACCOUNT_DISABLED("AUTH_1107", "Tài khoản đã bị khóa hoặc ngừng sử dụng", HttpStatus.UNAUTHORIZED),          // v4.0
+    VET_PROFILE_REQUIRED("AUTH_1108", "Tài khoản Bác sĩ phải có hồ sơ chuyên môn (số chứng chỉ hành nghề)", HttpStatus.BAD_REQUEST), // v4.0
 
     // 3. Thú cưng & Lịch hẹn (APPT: 1200 - 1299)
     PET_NOT_FOUND("APPT_1201", "Không tìm thấy hồ sơ thú cưng", HttpStatus.NOT_FOUND),
@@ -302,20 +317,29 @@ public enum ErrorCode {
     DIAGNOSIS_REQUIRED("CLIN_1307", "Vui lòng nhập chẩn đoán trước khi chốt đợt khám", HttpStatus.BAD_REQUEST),
     VITAL_SIGNS_REQUIRED("CLIN_1308", "Vui lòng nhập cân nặng và thân nhiệt của thú cưng", HttpStatus.BAD_REQUEST),
     IN_ROOM_SERVICE_PENDING("CLIN_1309", "Còn dịch vụ tại phòng chưa thực hiện hoặc chưa hủy", HttpStatus.BAD_REQUEST),
-    PAID_SERVICE_CANNOT_BE_CANCELLED("CLIN_1310", "Không thể hủy dịch vụ đã được thanh toán", HttpStatus.CONFLICT),
+    REFUND_NOT_ALLOWED("CLIN_1310", "Phí khám và dịch vụ khách tự hủy không được hoàn tiền", HttpStatus.CONFLICT),
     NOT_ASSIGNED_DOCTOR("CLIN_1311", "Bạn không phải Bác sĩ được phân công cho ca khám này", HttpStatus.FORBIDDEN),
+    TICKET_NOT_FOUND("CLIN_1312", "Không tìm thấy phiếu xếp hàng", HttpStatus.NOT_FOUND),
+    TICKET_NOT_WAITING("CLIN_1313", "Phiếu không còn ở trạng thái chờ gọi", HttpStatus.CONFLICT),
+    NO_QUEUE_TICKET("CLIN_1314", "Ca chưa có phiếu xếp hàng (khách chưa nộp phí khám / tiền dịch vụ)", HttpStatus.BAD_REQUEST),
+    SERVICE_PRICE_NOT_FOUND("CLIN_1315", "Dịch vụ chưa có giá đang áp dụng", HttpStatus.CONFLICT),                // v4.0
+    DOCTOR_INACTIVE("CLIN_1316", "Bác sĩ được chọn đã bị khóa hoặc ngừng làm việc", HttpStatus.CONFLICT),          // v4.0
+    MEDICAL_RECORD_LOCKED("CLIN_1317", "Hồ sơ khám đã khóa (đợt khám đã chốt), không thể chỉnh sửa", HttpStatus.CONFLICT), // v4.0
+    QUEUE_UNAVAILABLE("CLIN_1318", "Hàng đợi tạm thời không truy cập được, vui lòng thử lại sau ít giây", HttpStatus.SERVICE_UNAVAILABLE), // v4.0 (Redis lỗi)
 
     // 5. Hóa đơn & Kho dược (BILL/PHARM: 1400 - 1499) – dùng cho cả service_invoices (clinical) và medicine_invoices (billing-pharmacy)
     INVOICE_NOT_FOUND("BILL_1401", "Không tìm thấy hóa đơn", HttpStatus.NOT_FOUND),
     DISCOUNT_EXCEEDS_INVOICE_AMOUNT("BILL_1402", "Số tiền giảm giá không được vượt quá số tiền của hóa đơn này", HttpStatus.BAD_REQUEST),
     INVOICE_ALREADY_PAID("BILL_1403", "Hóa đơn này đã được thanh toán trước đó", HttpStatus.CONFLICT),
     INVOICE_ALREADY_CANCELLED("BILL_1408", "Hóa đơn này đã bị hủy", HttpStatus.CONFLICT),
-    VISIT_NOT_READY_FOR_PAYMENT("BILL_1409", "Đợt khám chưa được Bác sĩ chốt chuyên môn", HttpStatus.BAD_REQUEST),
-    PRESCRIPTION_NOT_FOUND("PHARM_1404", "Không tìm thấy đơn thuốc của đợt khám", HttpStatus.NOT_FOUND),
+    VISIT_NOT_READY_FOR_PAYMENT("BILL_1409", "Dịch vụ làm tại phòng chỉ thu khi Bác sĩ đã chốt chuyên môn", HttpStatus.BAD_REQUEST),
+    PRICE_EFFECTIVE_DATE_INVALID("BILL_1410", "Thời điểm hiệu lực của giá mới phải sau thời điểm bắt đầu của giá đang áp dụng", HttpStatus.BAD_REQUEST), // v4.0
+    MEDICINE_PRICE_NOT_FOUND("PHARM_1412", "Thuốc chưa có giá bán đang áp dụng", HttpStatus.CONFLICT),           // v4.0
+    PRESCRIPTION_NOT_FOUND("PHARM_1404", "Không tìm thấy đơn thuốc của đợt khám", HttpStatus.NOT_FOUND),   // v4.0: dùng ở clinical-service (giữ mã cũ)
     MEDICINE_NOT_FOUND("PHARM_1405", "Không tìm thấy thuốc trong danh mục kho", HttpStatus.NOT_FOUND),
     INSUFFICIENT_STOCK("PHARM_1406", "Số lượng tồn kho không đủ để bán", HttpStatus.CONFLICT),
     PRESCRIPTION_ALREADY_INVOICED("PHARM_1407", "Đơn thuốc này đã được lập hóa đơn thuốc trước đó", HttpStatus.CONFLICT),
-    PRESCRIPTION_LOCKED("PHARM_1411", "Đơn thuốc đã khóa (đợt khám đã chốt hoặc đơn đã được bán), không thể chỉnh sửa", HttpStatus.CONFLICT);
+    PRESCRIPTION_LOCKED("PHARM_1411", "Đơn thuốc đã khóa (đợt khám đã chốt), không thể chỉnh sửa", HttpStatus.CONFLICT); // v4.0: dùng ở clinical-service
 
     private final String code;
     private final String message;
@@ -488,364 +512,380 @@ spring:
           batch_size: 50       # Tối ưu hóa ghi hàng loạt
 ```
 
-### 7.2. Kiểm soát Concurrency với `@Version`
-Đối với các Entity có trạng thái thay đổi đồng thời (`PetVisit`, `ServiceInvoice`, `MedicineInvoice`, `Medicine`), bắt buộc thêm trường `@Version` để ngăn ngừa ghi đè dữ liệu (Optimistic Locking):
+### 7.2. Khóa chính UUIDv7, kiểu cột và ánh xạ Entity (v4.0)
+
+| Loại bảng | Kiểu Java | Ánh xạ |
+| :--- | :--- | :--- |
+| Thực thể nghiệp vụ (`users`, `pets`, `pet_visits`, `services`, `medicines`, hóa đơn, đơn thuốc...) | `UUID` | `@Id @UuidGenerator(style = UuidGenerator.Style.VERSION_7) @Column(columnDefinition = "BINARY(16)")` |
+| Dữ liệu chỉ thêm (lịch sử, dòng giá, nhật ký kho, outbox...) | `Long` | `@Id @GeneratedValue(strategy = GenerationType.IDENTITY)` |
+| Danh mục (`roles`, `species`, `service_categories`, `medicine_categories`, `lab_test_items`) | `Short` | `@Id @GeneratedValue(strategy = GenerationType.IDENTITY)`; code nghiệp vụ dùng cột `code` |
+| Quan hệ 1–1 mở rộng (`user_profiles`, `medical_records`, `medicine_stocks`...) | `UUID` | `@Id` + `@MapsId` trên `@OneToOne` tới bảng cha |
+| Cột trạng thái | enum Java | `@Enumerated(EnumType.STRING) @Column(length = 20)` – cột `VARCHAR`, không phải `ENUM` |
 
 ```java
+package com.vetclinic.billing.entity;
+
 @Entity
 @Table(name = "medicines")
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
 public class Medicine {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @UuidGenerator(style = UuidGenerator.Style.VERSION_7)   // sinh ở ứng dụng, tăng dần theo thời gian
+    @Column(columnDefinition = "BINARY(16)")
+    private UUID id;
 
-    @Column(name = "code", nullable = false, unique = true, length = 50)
-    private String code;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "category_id")
+    private MedicineCategory category;                        // bảng danh mục, không phải enum
 
-    @Column(name = "name", nullable = false, length = 150)
-    private String name;
+    @Column(nullable = false, unique = true, length = 50) private String code;
+    @Column(nullable = false, length = 150) private String name;
+    @Column(name = "dosage_form", nullable = false, length = 50) private String dosageForm;
+    @Column(length = 50) private String strength;
+    @Column(name = "base_unit", nullable = false, length = 30) private String baseUnit;
+    @Column(name = "packaging_spec", nullable = false, length = 150) private String packagingSpec;
+    @Column(length = 150) private String manufacturer;
+    @Column(name = "requires_prescription", nullable = false) private boolean requiresPrescription;
+    @Column(name = "min_stock_alert", nullable = false) private int minStockAlert;
+    @Column(name = "is_active", nullable = false) private boolean active;   // xóa mềm
 
-    @Column(name = "sale_price", nullable = false, precision = 12, scale = 2)
-    private BigDecimal salePrice;    // Giá bán niêm yết hiện tại (snapshot sang medicine_invoice_items khi bán)
+    @OneToMany(mappedBy = "medicine", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<MedicineIngredient> ingredients = new ArrayList<>();
+    // KHÔNG có giá và tồn kho: giá ở MedicinePrice (lịch sử), tồn ở MedicineStock (1–1)
+}
 
-    @Column(name = "vat_rate", nullable = false, precision = 4, scale = 2)
-    private BigDecimal vatRate;
+@Entity
+@Table(name = "medicine_stocks")
+@Getter @Setter @NoArgsConstructor
+public class MedicineStock {
+    @Id
+    @Column(name = "medicine_id", columnDefinition = "BINARY(16)")
+    private UUID medicineId;
 
-    @Column(name = "stock_quantity", nullable = false)
-    private Integer stockQuantity;   // Chỉ thay đổi qua deductStockQuantity / giao dịch kho, không sửa tay
+    @OneToOne(fetch = FetchType.LAZY) @MapsId @JoinColumn(name = "medicine_id")
+    private Medicine medicine;
 
-    @Column(name = "min_stock_alert", nullable = false)
-    private Integer minStockAlert;
+    @Column(name = "quantity_on_hand", nullable = false)
+    private int quantityOnHand;          // chỉ đổi qua deduct / import / adjust, luôn kèm dòng inventory_transactions
 
     @Version
-    private Long version; // Khóa lạc quan chống race condition
+    private Long version;                // khóa lạc quan
 }
 ```
+
+> **Lưu ý:** Hibernate ánh xạ `java.util.UUID` sang `BINARY(16)` trên MySQL; `columnDefinition` để `ddl-auto: validate` khớp chính xác `schema_init.sql`. Không dùng `UUID.randomUUID()` (v4, ngẫu nhiên) làm khóa vì gây phân mảnh chỉ mục.
+
+### 7.3. Kiểm soát Concurrency với `@Version`
+Bắt buộc `@Version` trên các entity có thể bị sửa đồng thời: `PetVisit`, `MedicalRecord`, `VisitServiceDetail`, `ServiceInvoice`, `MedicineInvoice`, `MedicineStock`, `Appointment`, `User`. Xung đột → `ObjectOptimisticLockingFailureException` → `GlobalExceptionHandler` trả `SYS_1005`. **Phiếu xếp hàng không còn là entity** (nằm ở Redis, mục 9.3) nên không còn xung đột phiên bản khi gọi số.
+
+### 7.4. Bảng giá có lịch sử (`PriceBook`)
+Giá dịch vụ (`service_prices`) và giá thuốc (`medicine_prices`) dùng chung quy tắc: dòng giá **không bao giờ bị sửa số tiền hay xóa**; đổi giá = đóng dòng đang mở + thêm dòng mới trong một giao dịch; hóa đơn chụp `unitPrice`, `vatRate` từ dòng đang hiệu lực.
+
+```java
+// ServicePriceRepository (clinical-service)
+@Query("""
+        SELECT p FROM ServicePrice p
+        WHERE p.service.id = :serviceId AND p.effectiveFrom <= :at
+          AND (p.effectiveTo IS NULL OR p.effectiveTo > :at)
+        """)
+Optional<ServicePrice> findEffective(@Param("serviceId") UUID serviceId, @Param("at") LocalDateTime at);
+
+Optional<ServicePrice> findByServiceIdAndEffectiveToIsNull(UUID serviceId);   // dòng đang mở
+
+// ServicePriceBook
+@Service
+@RequiredArgsConstructor
+public class ServicePriceBook {
+    private final ServicePriceRepository priceRepository;
+
+    /** Giá dùng để lập hóa đơn lúc chỉ định / tiếp đón. */
+    public ServicePrice current(UUID serviceId) {
+        return priceRepository.findEffective(serviceId, LocalDateTime.now(CLINIC_ZONE))
+                .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PRICE_NOT_FOUND));   // CLIN_1315
+    }
+
+    /** ADMIN đổi giá (UC quản lý danh mục). Có thể đặt giá có hiệu lực trong tương lai. */
+    @Transactional(rollbackFor = Exception.class)
+    public ServicePrice changePrice(UUID serviceId, ChangePriceRequest req, UUID adminId) {
+        ServicePrice open = priceRepository.findByServiceIdAndEffectiveToIsNull(serviceId)
+                .orElseThrow(() -> new AppException(ErrorCode.SERVICE_PRICE_NOT_FOUND));
+        if (!req.effectiveFrom().isAfter(open.getEffectiveFrom())) {
+            throw new AppException(ErrorCode.PRICE_EFFECTIVE_DATE_INVALID);              // BILL_1410
+        }
+        open.setEffectiveTo(req.effectiveFrom());                                       // chỉ đóng, không sửa tiền
+        return priceRepository.save(ServicePrice.builder()
+                .service(open.getService()).price(req.price()).vatRate(req.vatRate())
+                .effectiveFrom(req.effectiveFrom()).changeReason(req.reason()).createdBy(adminId)
+                .build());                                                              // UNIQUE(service_id, effective_from)
+    }
+}
+```
+`MedicinePriceBook` trong `billing-pharmacy-service` giống hệt (bảng `medicine_prices`, lỗi `PHARM_1412`).
+
+### 7.5. Tệp ảnh: lưu `file_key`, trả URL ký tạm
+- Khi tải lên: `file_key = "imaging/" + yyyy + "/" + MM + "/" + UUIDv7 + "." + đuôi`; ghi tệp vào thư mục gốc cấu hình `app.storage.root` (Docker Volume); lưu `file_key`, `original_file_name`, `content_type`, `file_size`, `uploaded_by`.
+- Khi đọc: `GET /api/v1/clinical/imaging-attachments/{id}/url` kiểm tra quyền rồi trả `"/files/" + fileKey + "?exp=" + epoch + "&sig=" + HMAC_SHA256(fileKey + exp, app.storage.secret)`, hạn 1 giờ. Endpoint `/files/**` kiểm tra chữ ký và hạn trước khi trả tệp.
+- Không lưu URL tuyệt đối trong CSDL: đổi máy chủ, tên miền hay chuyển sang kho đối tượng chỉ đổi cấu hình.
 
 ---
 
 ## CHƯƠNG 8: QUẢN LÝ GIAO DỊCH CSDL & AN TOÀN CONCURRENCY KHO DƯỢC
 
 ### 8.0. Nguyên tắc chung
-- Mỗi nghiệp vụ tiền / kho nằm trọn trong CSDL của **một** service và được bọc trong **một** phương thức `@Transactional(rollbackFor = Exception.class)`:
-  - `clinical-service`: chỉ định dịch vụ + lập `service_invoices`; hủy dịch vụ + hủy hóa đơn; thu hóa đơn dịch vụ + hoàn tất ca khám.
-  - `billing-pharmacy-service`: lập `medicine_invoices`; thu tiền hóa đơn thuốc + trừ kho + ghi `inventory_transactions`.
-- **Không gọi Feign bên trong `@Transactional`.** Kiểm tra điều kiện liên service (ví dụ trạng thái đợt khám) thực hiện ở lớp Facade trước khi gọi phương thức giao dịch.
-- **Không lưu tổng tiền.** Số tiền được tính bằng VIEW (`v_service_invoice_amounts`, `v_medicine_invoice_amounts`) hoặc tính trong code từ `quantity × unitPrice × (1 + vatRate) − discountAmount`.
+- Mỗi nghiệp vụ tiền / kho nằm trọn trong CSDL của **một** service, bọc trong **một** `@Transactional(rollbackFor = Exception.class)`.
+- **Sự kiện ghi vào `outbox_events` trong cùng giao dịch** bằng `OutboxWriter` (mục 9.2). Không gọi `rabbitTemplate` trong nghiệp vụ; không dùng `@TransactionalEventListener(AFTER_COMMIT)` để gửi sự kiện nghiệp vụ nữa.
+- **Không gọi Feign bên trong `@Transactional`.** Kiểm tra liên service (Bác sĩ còn `ACTIVE`, tra thuốc) làm ở lớp Facade trước khi gọi phương thức giao dịch.
+- **Không gọi Redis bên trong `@Transactional` để thay đổi phiếu.** Thao tác Redis chạy sau commit (`TransactionSynchronization.afterCommit`) hoặc trong listener sự kiện; dữ liệu cần cho lịch sử phiếu được đọc từ Redis trước khi mở giao dịch.
+- **Không lưu tổng tiền.** Tính bằng VIEW hoặc trong code.
 
-### 8.1. Trừ kho Nguyên tử Tuyệt đối (Atomic SQL Update)
-Để chống hiện tượng hai thu ngân cùng bán hộp thuốc cuối cùng dẫn đến kho bị âm, **Repository bắt buộc định nghĩa câu lệnh cập nhật có điều kiện kiểm tra tồn kho tại tầng Database** (đồng thời tăng `version` vì câu lệnh bulk update không đi qua cơ chế `@Version` của Hibernate):
+### 8.1. Trừ kho Nguyên tử (Atomic SQL Update) trên `medicine_stocks`
 
 ```java
-package com.vetclinic.billing.repository;
-
-import com.vetclinic.billing.entity.Medicine;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
-
 @Repository
-public interface MedicineRepository extends JpaRepository<Medicine, Long> {
+public interface MedicineStockRepository extends JpaRepository<MedicineStock, UUID> {
 
-    // Không dùng clearAutomatically: xóa persistence context giữa giao dịch sẽ làm các entity đã nạp
-    // (hóa đơn, thuốc) bị detach và gây LazyInitializationException ở các dòng sau.
     @Modifying(flushAutomatically = true)
-    @Query("UPDATE Medicine m SET m.stockQuantity = m.stockQuantity - :quantity, m.version = m.version + 1 " +
-           "WHERE m.id = :id AND m.stockQuantity >= :quantity")
-    int deductStockQuantity(@Param("id") Long id, @Param("quantity") int quantity);
+    @Query("UPDATE MedicineStock s SET s.quantityOnHand = s.quantityOnHand - :qty, s.version = s.version + 1 " +
+           "WHERE s.medicineId = :id AND s.quantityOnHand >= :qty")
+    int deduct(@Param("id") UUID medicineId, @Param("qty") int quantity);          // 0 dòng = thiếu kho
 
-    // Đọc lại tồn kho sau khi trừ (native query bỏ qua bộ nhớ đệm cấp 1) để phát MedicineLowStockEvent
-    @Query(value = "SELECT * FROM medicines WHERE id IN (:ids) AND stock_quantity <= min_stock_alert", nativeQuery = true)
-    List<Medicine> findLowStock(@Param("ids") List<Long> ids);
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE MedicineStock s SET s.quantityOnHand = s.quantityOnHand + :qty, s.version = s.version + 1 " +
+           "WHERE s.medicineId = :id")
+    int add(@Param("id") UUID medicineId, @Param("qty") int quantity);             // nhập kho / cân chỉnh dương
+
+    @Query(value = "SELECT BIN_TO_UUID(s.medicine_id) AS id, s.quantity_on_hand AS qty FROM medicine_stocks s " +
+                   "JOIN medicines m ON m.id = s.medicine_id " +
+                   "WHERE s.medicine_id IN (:ids) AND s.quantity_on_hand <= m.min_stock_alert", nativeQuery = true)
+    List<LowStockRow> findLowStock(@Param("ids") List<UUID> ids);
 }
 ```
+Tách tồn kho khỏi `medicines` nên dòng bị cập nhật liên tục khi bán là dòng nhỏ của `medicine_stocks`; sửa thông tin thuốc (quy cách, nhà sản xuất) không đụng tới, không gây xung đột `@Version`.
 
-### 8.2. Mẫu chuẩn: Bán thuốc theo đơn & Trừ kho (`billing-pharmacy-service`)
-Quy trình gồm 2 bước chính và 1 thao tác sửa (UC-36):
-1. **Lập hóa đơn thuốc** (`PENDING`): khách chọn thuốc và số lượng (số lượng kê chỉ để tham khảo; không vượt tồn kho), snapshot `unitPrice = medicines.sale_price`, `vatRate = medicines.vat_rate`.
-   - **Sửa hóa đơn thuốc** khi còn `PENDING` (khách bớt thuốc, hoặc sau EX-15): cập nhật / xóa dòng, giữ snapshot giá đã chốt, kiểm tra lại giảm giá. Không lập hóa đơn mới vì `prescription_id UNIQUE`; hóa đơn đã hủy là kết thúc.
-2. **Xác nhận thanh toán & xuất thuốc:** trong **một giao dịch**: trừ kho có điều kiện → ghi `inventory_transactions` (`EXPORT_SALE`, `quantity` âm) → hóa đơn `PAID`. Thiếu kho ở bất kỳ dòng nào thì rollback toàn bộ (EX-15).
-
-Quy tắc bổ sung:
-- Sắp xếp các dòng theo `medicineId` tăng dần trước khi trừ để **loại trừ nguy cơ Deadlock**.
-- Chống bán trùng (EX-16): `medicine_invoices.prescription_id UNIQUE` + kiểm tra trạng thái `PENDING` + `@Version` trên `MedicineInvoice`.
+### 8.2. Mẫu chuẩn: Hóa đơn thuốc nháp từ đơn thuốc & Thu tiền + Trừ kho (`billing-pharmacy-service`)
+1. **Tạo nháp (listener):** nhận `PrescriptionCreatedEvent` (phát khi Bác sĩ chốt ca) → tạo `medicine_invoices` `PENDING` + các dòng theo đơn (`prescribedQuantity = quantity` = số kê; giá từ `MedicinePriceBook`). Không có API tạo hóa đơn thuốc.
+2. **Sửa nháp (UC-36):** Thu ngân đổi số lượng theo khách (được nhiều hơn / ít hơn số kê, không vượt tồn kho – BR-32) hoặc bỏ dòng; cập nhật lại giá theo dòng giá hiện hành.
+3. **Thu tiền:** trong **một giao dịch**: trừ `medicine_stocks` có điều kiện → ghi `inventory_transactions` (`EXPORT_SALE`, âm) → `PAID` → outbox `MedicineInvoicePaidEvent` (+ `MedicineLowStockEvent`). Thiếu kho ở bất kỳ dòng nào thì rollback toàn bộ (EX-15).
 
 ```java
-package com.vetclinic.billing.service.impl;
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class PrescriptionCreatedListener {
 
-import com.vetclinic.billing.client.ClinicalVisitClient;
-import com.vetclinic.billing.constant.InventoryTransactionType;
-import com.vetclinic.billing.constant.PaymentStatus;
-import com.vetclinic.billing.dto.request.CreateMedicineInvoiceRequest;
-import com.vetclinic.billing.entity.*;
-import com.vetclinic.billing.event.MedicineInvoicePaidEvent;
-import com.vetclinic.billing.event.MedicineLowStockEvent;
-import com.vetclinic.billing.repository.*;
-import com.vetclinic.common.exception.AppException;
-import com.vetclinic.common.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+    private final IdempotentConsumer idempotent;            // mục 9.2
+    private final MedicineSaleService saleService;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+    @RabbitListener(queues = "billing.prescription-created")
+    public void on(PrescriptionCreatedEvent e) {
+        idempotent.run(e.eventId(), "billing.prescription-created", () -> saleService.createDraft(e));
+    }
+}
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MedicineSaleServiceImpl implements MedicineSaleService {
 
-    private final PrescriptionRepository prescriptionRepository;
     private final MedicineRepository medicineRepository;
-    private final MedicineInvoiceRepository medicineInvoiceRepository;
+    private final MedicineStockRepository stockRepository;
+    private final MedicineInvoiceRepository invoiceRepository;
     private final InventoryTransactionRepository inventoryRepository;
-    private final InvoiceCodeGenerator invoiceCodeGenerator;
-    private final ApplicationEventPublisher eventPublisher;
+    private final MedicinePriceBook priceBook;
+    private final InvoiceCodeGenerator codeGenerator;
+    private final OutboxWriter outbox;
 
-    /**
-     * Bước 1 – Lập hóa đơn thuốc (PENDING).
-     * Điều kiện "đợt khám đã WAITING_PAYMENT / COMPLETED" được Facade kiểm tra qua Feign TRƯỚC khi gọi hàm này.
-     */
+    /** Bước 1 – gọi trong giao dịch của IdempotentConsumer. */
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public MedicineInvoice createInvoice(Long prescriptionId, CreateMedicineInvoiceRequest request) {
-        Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new AppException(ErrorCode.PRESCRIPTION_NOT_FOUND));
-
-        if (medicineInvoiceRepository.existsByPrescriptionId(prescriptionId)) {
-            throw new AppException(ErrorCode.PRESCRIPTION_ALREADY_INVOICED);          // EX-16
-        }
-
-        Map<Long, PrescriptionItem> prescribed = prescription.getItems().stream()
-                .collect(Collectors.toMap(PrescriptionItem::getId, Function.identity()));
-
-        MedicineInvoice invoice = MedicineInvoice.builder()
-                .invoiceCode(invoiceCodeGenerator.next("MINV"))
-                .prescription(prescription)
-                .discountAmount(request.discountAmount())
-                .paymentStatus(PaymentStatus.PENDING)
-                .build();
-
-        for (var line : request.items()) {                                            // khách được mua một phần đơn
-            PrescriptionItem pi = prescribed.get(line.prescriptionItemId());
-            if (pi == null) throw new AppException(ErrorCode.INVALID_INPUT_DATA);
-            Medicine med = pi.getMedicine();
-            if (line.quantity() > med.getStockQuantity()) {                           // số kê chỉ tham khảo; chỉ chặn khi vượt tồn kho
-                throw new AppException(ErrorCode.INSUFFICIENT_STOCK);
+    public void createDraft(PrescriptionCreatedEvent e) {
+        Optional<MedicineInvoice> existing = invoiceRepository.findByPrescriptionId(e.prescriptionId());
+        if (existing.isPresent()) {                                            // UNIQUE(prescription_id)
+            MedicineInvoice inv = existing.get();
+            if (inv.getPaymentStatus() == PaymentStatus.PENDING) {             // Bác sĩ mở lại hồ sơ (T14) rồi chốt lại
+                inv.clearItems();                                               // dựng lại nháp theo đơn mới
+                addLines(inv, e);
+            } else {
+                log.warn("{}: đơn {} đã có hóa đơn {}", ErrorCode.PRESCRIPTION_ALREADY_INVOICED.getCode(),
+                        e.prescriptionId(), inv.getPaymentStatus());
             }
-            invoice.addItem(MedicineInvoiceItem.builder()
-                    .prescriptionItem(pi)
-                    .quantity(line.quantity())
-                    .unitPrice(med.getSalePrice())                                    // snapshot giá bán
-                    .vatRate(med.getVatRate())                                        // snapshot thuế suất
-                    .build());
+            return;
         }
-
-        if (invoice.getDiscountAmount().compareTo(invoice.grossAmount()) > 0) {      // EX-14
-            throw new AppException(ErrorCode.DISCOUNT_EXCEEDS_INVOICE_AMOUNT);
-        }
-        return medicineInvoiceRepository.save(invoice);                               // UNIQUE(prescription_id) chặn race
+        MedicineInvoice invoice = MedicineInvoice.builder()
+                .invoiceCode(codeGenerator.next("MINV"))
+                .prescriptionId(e.prescriptionId()).visitId(e.visitId())
+                .customerNameSnapshot(e.customerName()).customerPhoneSnapshot(e.customerPhone())
+                .petNameSnapshot(e.petName()).doctorNameSnapshot(e.doctorName())
+                .discountAmount(BigDecimal.ZERO).paymentStatus(PaymentStatus.PENDING)
+                .build();
+        addLines(invoice, e);
+        invoiceRepository.save(invoice);
     }
 
-    /**
-     * Sửa hóa đơn thuốc đang PENDING (UC-36 Luồng 9a, EX-15): giảm số lượng hoặc bỏ dòng.
-     * Map: prescriptionItemId -> số lượng mới (0 = bỏ dòng). Snapshot giá của các dòng còn lại giữ nguyên.
-     */
+    private void addLines(MedicineInvoice invoice, PrescriptionCreatedEvent e) {
+        for (var line : e.items()) {
+            Medicine med = medicineRepository.getReferenceById(line.medicineId());
+            MedicinePrice price = priceBook.current(line.medicineId());
+            invoice.addItem(MedicineInvoiceItem.builder()
+                    .medicine(med)
+                    .prescribedQuantity(line.quantity())                        // số kê, để đối chiếu
+                    .quantity(line.quantity())                                  // mặc định mua đúng đơn
+                    .unitPrice(price.getSalePrice()).vatRate(price.getVatRate())
+                    .build());
+        }
+    }
+
+    /** Bước 2 – sửa dòng khi PENDING: medicineId -> số lượng mới (0 = bỏ dòng). */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public MedicineInvoice updateItems(Long invoiceId, Map<Long, Integer> newQuantities, BigDecimal discountAmount) {
-        MedicineInvoice invoice = medicineInvoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new AppException(ErrorCode.INVOICE_NOT_FOUND));
-        switch (invoice.getPaymentStatus()) {
-            case PAID -> throw new AppException(ErrorCode.INVOICE_ALREADY_PAID);
-            case CANCELLED -> throw new AppException(ErrorCode.INVOICE_ALREADY_CANCELLED);
-            case PENDING -> { }
-        }
+    public MedicineInvoice updateItems(UUID invoiceId, Map<UUID, Integer> newQuantities, BigDecimal discount) {
+        MedicineInvoice invoice = loadPending(invoiceId);
         for (var entry : newQuantities.entrySet()) {
-            MedicineInvoiceItem item = invoice.findItemByPrescriptionItemId(entry.getKey())
-                    .orElseThrow(() -> new AppException(ErrorCode.INVALID_INPUT_DATA)); // chỉ sửa / bỏ dòng đã có
+            MedicineInvoiceItem item = invoice.findItemByMedicineId(entry.getKey())
+                    .orElseThrow(() -> new AppException(ErrorCode.INVALID_INPUT_DATA));      // chỉ thuốc có trong đơn
             int qty = entry.getValue();
-            if (qty == 0) {
-                invoice.removeItem(item);                                             // orphanRemoval = true
-            } else if (qty < 0 || qty > item.getPrescriptionItem().getMedicine().getStockQuantity()) {
-                throw new AppException(ErrorCode.INSUFFICIENT_STOCK);                 // không bán quá tồn kho
-            } else {
-                item.setQuantity(qty);                                                // giữ unitPrice, vatRate
-            }
+            if (qty == 0) { invoice.removeItem(item); continue; }
+            int onHand = stockRepository.findById(entry.getKey()).orElseThrow().getQuantityOnHand();
+            if (qty < 0 || qty > onHand) throw new AppException(ErrorCode.INSUFFICIENT_STOCK); // BR-32
+            item.setQuantity(qty);
         }
         if (invoice.getItems().isEmpty()) {
-            throw new AppException(ErrorCode.INVALID_INPUT_DATA, "Hóa đơn thuốc phải còn ít nhất 1 dòng; nếu khách không mua, hãy hủy hóa đơn");
+            throw new AppException(ErrorCode.INVALID_INPUT_DATA, "Khách không mua thuốc nào: hãy hủy hóa đơn thuốc");
         }
-        if (discountAmount != null) invoice.setDiscountAmount(discountAmount);
-        if (invoice.getDiscountAmount().compareTo(invoice.grossAmount()) > 0) {      // EX-14 kiểm tra lại
-            throw new AppException(ErrorCode.DISCOUNT_EXCEEDS_INVOICE_AMOUNT);
+        if (discount != null) invoice.setDiscountAmount(discount);
+        if (invoice.getDiscountAmount().compareTo(invoice.grossAmount()) > 0) {
+            throw new AppException(ErrorCode.DISCOUNT_EXCEEDS_INVOICE_AMOUNT);                // EX-14
         }
-        return medicineInvoiceRepository.save(invoice);                               // @Version chống sửa đồng thời
+        return invoice;                                                                       // @Version khi flush
     }
 
-    /**
-     * Bước 2 – Xác nhận thanh toán & xuất thuốc: PAID + trừ kho + EXPORT_SALE trong CÙNG MỘT giao dịch.
-     */
+    /** Bước 3 – PAID + trừ kho + EXPORT_SALE + outbox trong CÙNG MỘT giao dịch. */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public MedicineInvoice confirmPayment(Long invoiceId, Long cashierId) {
-        MedicineInvoice invoice = medicineInvoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new AppException(ErrorCode.INVOICE_NOT_FOUND));
-
-        switch (invoice.getPaymentStatus()) {
-            case PAID -> throw new AppException(ErrorCode.INVOICE_ALREADY_PAID);       // EX-16
-            case CANCELLED -> throw new AppException(ErrorCode.INVOICE_ALREADY_CANCELLED);
-            case PENDING -> { }
-        }
-
-        // Sắp xếp theo medicineId để mọi giao dịch khóa dòng theo cùng thứ tự -> tránh Deadlock
+    public MedicineInvoice confirmPayment(UUID invoiceId, UUID cashierId) {
+        MedicineInvoice invoice = loadPending(invoiceId);
+        // giá chốt tại thời điểm thu (bảng giá có thể đã đổi từ lúc tạo nháp)
+        invoice.getItems().forEach(i -> {
+            MedicinePrice p = priceBook.current(i.getMedicine().getId());
+            i.setUnitPrice(p.getSalePrice()); i.setVatRate(p.getVatRate());
+        });
         List<MedicineInvoiceItem> items = invoice.getItems().stream()
-                .sorted(Comparator.comparing(i -> i.getPrescriptionItem().getMedicine().getId()))
+                .sorted(Comparator.comparing(i -> i.getMedicine().getId()))   // cùng thứ tự khóa dòng -> tránh deadlock
                 .toList();
-
         for (MedicineInvoiceItem item : items) {
-            Medicine med = item.getPrescriptionItem().getMedicine();
-            int updated = medicineRepository.deductStockQuantity(med.getId(), item.getQuantity());
-            if (updated == 0) {                                                       // EX-15: rollback toàn bộ
+            if (stockRepository.deduct(item.getMedicine().getId(), item.getQuantity()) == 0) {
                 throw new AppException(ErrorCode.INSUFFICIENT_STOCK,
-                        "Thuốc [" + med.getName() + "] hiện không đủ tồn kho. Vui lòng giảm số lượng hoặc bỏ thuốc này khỏi hóa đơn");
+                        "Thuốc [" + item.getMedicine().getName() + "] không đủ tồn kho"); // EX-15: rollback toàn bộ
             }
-            inventoryRepository.save(InventoryTransaction.builder()
-                    .medicineId(med.getId())
-                    .transactionType(InventoryTransactionType.EXPORT_SALE)
-                    .quantity(-item.getQuantity())                                    // số lượng có dấu: âm = xuất
-                    .medicineInvoiceId(invoice.getId())
-                    .notes("Bán theo hóa đơn " + invoice.getInvoiceCode())
-                    .createdBy(cashierId)
-                    .build());
+            inventoryRepository.save(InventoryTransaction.exportSale(item, invoice, cashierId)); // quantity âm
         }
+        invoice.markPaid(cashierId, Instant.now());
+        outbox.write("MEDICINE_INVOICE", invoice.getId(), "pharmacy.medicine_invoice_paid",
+                MedicineInvoicePaidEvent.of(invoice));                                // reporting + notification
+        stockRepository.findLowStock(items.stream().map(i -> i.getMedicine().getId()).toList())
+                .forEach(r -> outbox.write("MEDICINE", r.id(), "pharmacy.low_stock", new MedicineLowStockEvent(r.id(), r.qty())));
+        return invoice;
+    }
 
-        invoice.setPaymentStatus(PaymentStatus.PAID);
-        invoice.setPaidAt(Instant.now());
-        invoice.setCashierId(cashierId);
-        MedicineInvoice saved = medicineInvoiceRepository.save(invoice);
-        // Hai lần bấm gần như đồng thời: lần sau bị OptimisticLockException (@Version) khi flush
-        // -> rollback cả phần trừ kho của lần sau -> trả SYS_1005.
-
-        // Sự kiện nội bộ, được gửi ra RabbitMQ SAU KHI COMMIT (xem 9.2)
-        eventPublisher.publishEvent(new MedicineInvoicePaidEvent(saved.getId(),
-                saved.getPrescription().getVisitId(), cashierId));
-        medicineRepository.findLowStock(items.stream()
-                        .map(i -> i.getPrescriptionItem().getMedicine().getId()).toList())
-                .forEach(m -> eventPublisher.publishEvent(new MedicineLowStockEvent(m.getId(), m.getStockQuantity())));
-        return saved;
+    private MedicineInvoice loadPending(UUID id) {
+        MedicineInvoice inv = invoiceRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.INVOICE_NOT_FOUND));
+        switch (inv.getPaymentStatus()) {
+            case PAID -> throw new AppException(ErrorCode.INVOICE_ALREADY_PAID);            // EX-16
+            case CANCELLED -> throw new AppException(ErrorCode.INVOICE_ALREADY_CANCELLED);
+            default -> { }
+        }
+        return inv;
     }
 }
 ```
 
-> **Entity hỗ trợ:** `MedicineInvoice` khai báo `@OneToMany(mappedBy = "medicineInvoice", cascade = ALL, orphanRemoval = true)` cho `items` và các hàm tiện ích `addItem`, `removeItem`, `findItemByPrescriptionItemId`, `grossAmount()` (tổng `quantity × unitPrice × (1 + vatRate)` của các dòng, không lưu thành cột).
-
-> **Lưu ý:** Bước 2 không thay đổi trạng thái đợt khám. Việc khách mua thuốc là tùy chọn; ca khám đã `COMPLETED` từ khi thu đủ hóa đơn dịch vụ (8.3).
+> Bước 3 không đổi trạng thái đợt khám. Ca khám `COMPLETED` khi thu đủ hóa đơn dịch vụ (8.3); khách mua ngoài thì `POST …/cancel` → `CANCELLED`.
 
 ### 8.3. Mẫu chuẩn: Thu tiền hóa đơn dịch vụ & Hoàn tất ca khám (`clinical-service`)
-Hóa đơn dịch vụ và đợt khám cùng CSDL nên việc thu tiền và chuyển ca sang `COMPLETED` (T10) nằm trong một giao dịch cục bộ, **không cần sự kiện từ service khác**:
+v4.0 **không phát phiếu trong giao dịch thu tiền**: giao dịch chỉ chuyển hóa đơn sang `PAID` và ghi outbox `ServiceInvoicePaidEvent`; listener `QueueIssuerListener` của chính `clinical-service` nhận sự kiện và phát phiếu trên Redis (mục 9.3). Nhờ outbox, đã thu tiền thì chắc chắn có phiếu, kể cả khi Redis hoặc service sập ngay sau commit.
 
 ```java
-// ServiceInvoiceRepository
-@Query("SELECT si FROM ServiceInvoice si WHERE si.id IN :ids AND si.visitServiceDetail.visit.id = :visitId")
-List<ServiceInvoice> findByIdsAndVisitId(@Param("ids") List<Long> ids, @Param("visitId") Long visitId);
-
-@Query("SELECT COUNT(si) > 0 FROM ServiceInvoice si " +
-       "WHERE si.visitServiceDetail.visit.id = :visitId AND si.paymentStatus = :status")
-boolean existsByVisitIdAndStatus(@Param("visitId") Long visitId, @Param("status") PaymentStatus status);
-
-// ServiceInvoicePaymentServiceImpl
 @Override
 @Transactional(rollbackFor = Exception.class)
-public void confirmServicePayment(Long visitId, List<Long> invoiceIds, Long cashierId) {
+public void confirmServicePayment(UUID visitId, List<UUID> invoiceIds, UUID cashierId) {
     PetVisit visit = petVisitRepository.findById(visitId)
             .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
-    if (visit.getStatus() != VisitStatus.WAITING_PAYMENT && visit.getStatus() != VisitStatus.COMPLETED) {
-        throw new AppException(ErrorCode.VISIT_NOT_READY_FOR_PAYMENT);              // BR-27
-    }
-
-    // service_invoices không có cột visit_id: repository dùng JPQL JOIN qua visitServiceDetail.visit
     List<ServiceInvoice> invoices = serviceInvoiceRepository.findByIdsAndVisitId(invoiceIds, visitId);
     if (invoiceIds.isEmpty() || invoices.size() != new HashSet<>(invoiceIds).size()) {
-        throw new AppException(ErrorCode.INVOICE_NOT_FOUND);                       // có id không thuộc đợt khám này
+        throw new AppException(ErrorCode.INVOICE_NOT_FOUND);
     }
+    Instant paidAt = Instant.now();
+    boolean closed = visit.getStatus() == VisitStatus.WAITING_PAYMENT || visit.getStatus() == VisitStatus.COMPLETED;
     for (ServiceInvoice inv : invoices) {
         switch (inv.getPaymentStatus()) {
-            case PAID -> throw new AppException(ErrorCode.INVOICE_ALREADY_PAID);
+            case PAID, REFUNDED -> throw new AppException(ErrorCode.INVOICE_ALREADY_PAID);
             case CANCELLED -> throw new AppException(ErrorCode.INVOICE_ALREADY_CANCELLED);
-            case PENDING -> { }
+            default -> { }
         }
-        inv.setPaymentStatus(PaymentStatus.PAID);
-        inv.setPaidAt(Instant.now());
-        inv.setCashierId(cashierId);                                                // @Version chống thu trùng
+        ServiceCategory cat = inv.getVisitServiceDetail().getService().getCategory();   // bảng danh mục
+        if (!cat.isRequiresPrepayment() && !closed) {
+            throw new AppException(ErrorCode.VISIT_NOT_READY_FOR_PAYMENT);              // làm tại phòng: thu khi chốt ca
+        }
+        inv.markPaid(cashierId, paidAt);                                                // @Version chống thu trùng
     }
 
-    // T10: mọi hóa đơn dịch vụ của ca đều PAID hoặc CANCELLED -> COMPLETED (không xét thuốc)
-    boolean allSettled = !serviceInvoiceRepository.existsByVisitIdAndStatus(visitId, PaymentStatus.PENDING);
-    if (allSettled && visit.getStatus() == VisitStatus.WAITING_PAYMENT) {
-        visit.setStatus(VisitStatus.COMPLETED);
-        statusHistoryRepository.save(PetVisitStatusHistory.of(visitId,
-                VisitStatus.WAITING_PAYMENT, VisitStatus.COMPLETED, cashierId, "Thu đủ hóa đơn dịch vụ"));
-        eventPublisher.publishEvent(new VisitCompletedEvent(visitId, cashierId));
+    // Một sự kiện cho cả lần thu: reporting ghi doanh thu, queue-issuer phát phiếu cho dòng có queueType
+    outbox.write("VISIT", visitId, "invoice.service_paid",
+            ServiceInvoicePaidEvent.of(visit, invoices, cashierId, paidAt));
+
+    // T10: mọi hóa đơn dịch vụ đã PAID / CANCELLED / REFUNDED -> COMPLETED
+    if (visit.getStatus() == VisitStatus.WAITING_PAYMENT
+            && !serviceInvoiceRepository.existsByVisitIdAndStatus(visitId, PaymentStatus.PENDING)) {
+        visit.changeStatus(VisitStatus.COMPLETED, cashierId, "Thu đủ hóa đơn dịch vụ", statusHistoryRepository);
+        outbox.write("VISIT", visitId, "visit.completed", VisitCompletedEvent.of(visit));
     }
-    // Ca đã COMPLETED do khách bỏ về (EX-11): chỉ thu công nợ, giữ nguyên trạng thái.
 }
 ```
+
+**Lập hóa đơn lúc chỉ định / tiếp đón** luôn lấy giá từ `ServicePriceBook.current(serviceId)` và chụp sang `service_invoices.unit_price`, `vat_rate`. Hủy dịch vụ đã thu do phòng khám không làm được → `REFUNDED` + outbox `ServiceInvoiceRefundedEvent`; khách tự hủy → giữ `PAID`; phí khám không bao giờ `REFUNDED` (`CLIN_1310`).
 
 ---
 
-## CHƯƠNG 9: QUY CHUẨN GIAO TIẾP LIÊN DỊCH VỤ (OPENFEIGN & RABBITMQ)
+## CHƯƠNG 9: QUY CHUẨN GIAO TIẾP LIÊN DỊCH VỤ (OPENFEIGN, RABBITMQ, OUTBOX, REDIS)
 
 ### 9.1. Giao tiếp Đồng bộ (OpenFeign)
-0. **Chỉ dùng để ĐỌC:** Feign chỉ dùng cho truy vấn đọc / kiểm tra điều kiện tiên quyết, gọi tới endpoint nội bộ `/internal/**`. **Cấm** dùng Feign để ghi dữ liệu sang service khác (ví dụ check-in không gọi Feign để đổi trạng thái lịch hẹn mà phát `VisitCheckedInEvent`). Lời gọi Feign đặt ngoài `@Transactional`. Danh mục lời gọi được phép: `THIET_KE_KIEN_TRUC_MICROSERVICES.md` mục 5.1.
-1. **Cấu hình Timeouts Bắt buộc:** Cấm để timeout mặc định (60s). Phải đặt rõ ràng:
+0. **Chỉ dùng để ĐỌC**, gọi `/internal/**`, đặt ngoài `@Transactional`. Danh mục lời gọi: `THIET_KE_KIEN_TRUC_MICROSERVICES.md` mục 5.1 (v4.0 thêm `clinical → billing-pharmacy` tra thuốc; bỏ `billing → clinical`).
+1. **Timeout + Circuit Breaker:**
    ```yaml
    spring:
      cloud:
        openfeign:
+         circuitbreaker:
+           enabled: true
          client:
            config:
              default:
-               connectTimeout: 3000   # 3 giây
-               readTimeout: 5000      # 5 giây
+               connectTimeout: 2000
+               readTimeout: 2000
+   resilience4j:
+     circuitbreaker:
+       configs:
+         default:
+           slidingWindowSize: 20
+           failureRateThreshold: 50
+           waitDurationInOpenState: 10s
    ```
-2. **Custom ErrorDecoder Chuẩn sử dụng Spring ObjectMapper:**
+   Lời gọi chỉ để **hiển thị** (làm giàu tên) dùng fallback trả snapshot; lời gọi để **kiểm tra điều kiện ghi** (Bác sĩ còn `ACTIVE`, thuốc tồn tại) không có fallback: lỗi thì trả `SYS_1004`, không ghi dữ liệu.
+2. **`CustomFeignErrorDecoder`** khôi phục `ErrorCode` từ phản hồi của service con (giữ như v3.0):
    ```java
-   // Không gắn @Component: bean được tạo trong CommonWebAutoConfiguration (mục 2.2)
    @RequiredArgsConstructor
    public class CustomFeignErrorDecoder implements ErrorDecoder {
-       private final ObjectMapper objectMapper; // Inject ObjectMapper từ Spring (đã có JavaTimeModule)
-
+       private final ObjectMapper objectMapper;
        @Override
        public Exception decode(String methodKey, Response response) {
            try {
                if (response.body() != null) {
-                   ApiResponse<?> errorResponse = objectMapper.readValue(
-                           response.body().asInputStream(), ApiResponse.class);
-                   // Khôi phục chính xác ErrorCode từ service con trả về
+                   ApiResponse<?> err = objectMapper.readValue(response.body().asInputStream(), ApiResponse.class);
                    for (ErrorCode ec : ErrorCode.values()) {
-                       if (ec.getCode().equals(errorResponse.getErrorCode())) {
-                           return new AppException(ec, errorResponse.getMessage());
-                       }
+                       if (ec.getCode().equals(err.getErrorCode())) return new AppException(ec, err.getMessage());
                    }
-                   return new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, errorResponse.getMessage());
+                   return new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION, err.getMessage());
                }
            } catch (IOException e) {
                return new AppException(ErrorCode.SERVICE_UNAVAILABLE);
@@ -855,54 +895,174 @@ public void confirmServicePayment(Long visitId, List<Long> invoiceIds, Long cash
    }
    ```
 
-### 9.2. Giao tiếp Bất đồng bộ (RabbitMQ) & Bắn Event Sau Commit
-> [!IMPORTANT]
-> **Cơ chế Bắn Event Sau Commit (`@TransactionalEventListener`):**  
-> Tuyệt đối không gọi `rabbitTemplate.convertAndSend` trực tiếp bên trong method `@Transactional`. Bắt buộc phải lắng nghe sự kiện nội bộ và chỉ gửi ra RabbitMQ khi CSDL đã Commit hoàn tất 100%:
+### 9.2. Giao tiếp Bất đồng bộ: Transactional Outbox & Consumer Idempotent
 
+> [!IMPORTANT]
+> **Quy tắc v4.0:** mọi sự kiện làm thay đổi dữ liệu ở service khác được ghi vào bảng `outbox_events` **trong cùng giao dịch** với thay đổi nghiệp vụ, rồi `OutboxRelay` mới gửi ra RabbitMQ. Không gửi trực tiếp trong `@Transactional`, không dùng `AFTER_COMMIT` (sập ngay sau commit là mất sự kiện). Ngoại lệ duy nhất: `QueueTicketIssuedEvent`, `PatientCalledEvent` (chỉ làm mới màn hình, sinh từ thao tác Redis) được gửi trực tiếp.
+
+**1. Ghi sự kiện (`OutboxWriter`, dùng chung trong `common-library`, phần JPA):**
 ```java
 @Component
 @RequiredArgsConstructor
-public class ClinicalEventPublisher {
+public class OutboxWriter {
+    private final OutboxEventRepository repository;
+    private final ObjectMapper objectMapper;
 
+    /** Phải được gọi BÊN TRONG một @Transactional đang mở. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void write(String aggregateType, UUID aggregateId, String routingKey, BaseEvent event) {
+        repository.save(OutboxEvent.builder()
+                .eventId(event.eventId())                       // UUIDv7 sinh khi tạo event
+                .aggregateType(aggregateType).aggregateId(aggregateId)
+                .eventType(event.getClass().getSimpleName()).routingKey(routingKey)
+                .payload(objectMapper.writeValueAsString(event))
+                .status(OutboxStatus.PENDING).build());
+    }
+}
+
+/** Mọi sự kiện kế thừa: có eventId, occurredAt. */
+public interface BaseEvent { UUID eventId(); Instant occurredAt(); }
+```
+
+**2. Gửi sự kiện (`OutboxRelay`, mỗi service một tiến trình):**
+```java
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class OutboxRelay {
+    private final OutboxEventRepository repository;
+    private final RabbitTemplate rabbitTemplate;          // bật publisher confirms (spring.rabbitmq.publisher-confirm-type: correlated)
+
+    @Scheduled(fixedDelay = 500)
+    @Transactional
+    public void publishBatch() {
+        // SELECT ... WHERE status='PENDING' AND next_attempt_at <= NOW() ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED
+        for (OutboxEvent e : repository.lockNextBatch(100)) {
+            try {
+                CorrelationData cd = new CorrelationData(e.getEventId().toString());
+                rabbitTemplate.convertAndSend("clinic.events", e.getRoutingKey(), toMessage(e), cd);
+                if (!cd.getFuture().get(5, TimeUnit.SECONDS).isAck()) throw new AmqpException("nack");
+                e.markPublished(Instant.now());
+            } catch (Exception ex) {
+                e.markFailedAttempt(ex.getMessage());     // attempt_count++, next_attempt_at lùi dần; >10 lần -> FAILED
+                log.warn("Gửi outbox {} lỗi lần {}: {}", e.getEventId(), e.getAttemptCount(), ex.getMessage());
+                break;                                    // giữ thứ tự: dừng lô, lần sau gửi tiếp từ dòng này
+            }
+        }
+    }
+
+    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Ho_Chi_Minh")
+    @Transactional
+    public void cleanup() { repository.deletePublishedBefore(Instant.now().minus(7, ChronoUnit.DAYS)); }
+}
+```
+
+**3. Nhận sự kiện idempotent (`IdempotentConsumer`):**
+```java
+@Component
+@RequiredArgsConstructor
+public class IdempotentConsumer {
+    private final ProcessedEventRepository repository;
+
+    /** Chạy action trong MỘT giao dịch cùng với việc ghi processed_events; nhận trùng thì bỏ qua. */
+    @Transactional(rollbackFor = Exception.class)
+    public void run(UUID eventId, String consumer, Runnable action) {
+        if (repository.existsById(new ProcessedEventId(eventId, consumer))) return;
+        action.run();
+        repository.save(new ProcessedEvent(eventId, consumer));     // trùng khóa do chạy song song -> rollback, an toàn
+    }
+}
+```
+
+**Cấu hình:** `Jackson2JsonMessageConverter`; mỗi listener một queue `<service>.<listener>` bind vào `clinic.events` theo routing key, kèm DLQ `<queue>.dlq`; retry 3 lần (1s, 2s, 4s) rồi vào DLQ.
+
+**Danh mục 17 sự kiện v4.0** (khớp `THIET_KE_KIEN_TRUC_MICROSERVICES.md` mục 5.2):
+
+| Event class | Routing key | Producer | Consumer (queue) |
+| :--- | :--- | :--- | :--- |
+| `UserProfileUpdatedEvent` | `user.profile_updated` | auth | clinical (`clinical.snapshot-updater`), appointment (`appointment.snapshot-updater`), reporting |
+| `UserStatusChangedEvent` | `user.status_changed` | auth | clinical (`clinical.doctor-status`), notification |
+| `AppointmentBookedEvent` | `appointment.booked` | appointment | notification |
+| `AppointmentStatusChangedEvent` | `appointment.status_changed` | appointment | notification |
+| `AppointmentNoShowEvent` | `appointment.no_show` | appointment | notification |
+| `PetUpdatedEvent` | `pet.updated` | clinical | appointment, reporting |
+| `VisitCheckedInEvent` | `visit.checked_in` | clinical | appointment, clinical (`clinical.queue-issuer`, ca cấp cứu), reporting, notification |
+| `ServiceInvoicePaidEvent` | `invoice.service_paid` | clinical | clinical (`clinical.queue-issuer`), reporting, notification |
+| `ServiceInvoiceRefundedEvent` | `invoice.service_refunded` | clinical | reporting, notification |
+| `QueueTicketIssuedEvent` | `queue.ticket_issued` | clinical (trực tiếp) | notification |
+| `PatientCalledEvent` | `visit.patient_called` | clinical (trực tiếp) | notification |
+| `ParaclinicalResultsReadyEvent` | `visit.results_ready` | clinical | clinical (`clinical.queue-issuer`), notification |
+| `PrescriptionCreatedEvent` | `prescription.created` | clinical | billing-pharmacy (`billing.prescription-created`) |
+| `VisitCompletedEvent` | `visit.completed` | clinical | reporting, notification |
+| `VisitCancelledEvent` | `visit.cancelled` | clinical | reporting, notification |
+| `MedicineInvoicePaidEvent` | `pharmacy.medicine_invoice_paid` | billing-pharmacy | reporting, notification |
+| `MedicineLowStockEvent` | `pharmacy.low_stock` | billing-pharmacy | notification |
+
+**Cập nhật snapshot (ví dụ `clinical.snapshot-updater`):**
+```java
+@RabbitListener(queues = "clinical.snapshot-updater")
+public void on(UserProfileUpdatedEvent e) {
+    idempotent.run(e.eventId(), "clinical.snapshot-updater", () -> {
+        petRepository.updateOwnerSnapshot(e.userId(), e.fullName(), e.phoneNumber());     // UPDATE ... WHERE owner_id = ?
+        petVisitRepository.updateDoctorNameSnapshot(e.userId(), e.fullName());            // UPDATE ... WHERE doctor_id = ?
+    });
+}
+```
+
+### 9.3. Hàng đợi trên Redis (`clinical-service`)
+
+**Khóa:** xem `THIET_KE_CO_SO_DU_LIEU_ERD.md` Mục 3. `score = (2 − priority) × 10^13 + paidAtEpochMillis` (ca cấp cứu / ca có kết quả: thời điểm tiếp đón / có kết quả). Giờ ngày dùng múi `Asia/Ho_Chi_Minh`.
+
+**1. Phát phiếu nguyên tử (`issue_ticket.lua`):**
+```lua
+-- KEYS[1]=queue:{date}:{type}:{owner}  KEYS[2]=queue:seq:{date}:{type}  KEYS[3]=queue:dedupe:{eventId}  KEYS[4]=queue:visit:{visitId}
+-- ARGV[1]=ticketId ARGV[2]=score ARGV[3]=ttlSeconds ARGV[4..]=cặp field/value của Hash phiếu
+local existed = redis.call('GET', KEYS[3])
+if existed then return {existed, redis.call('HGET', 'ticket:' .. existed, 'ticketNo')} end   -- nhận trùng sự kiện
+local no = redis.call('INCR', KEYS[2])
+redis.call('EXPIRE', KEYS[2], 172800)
+local tkey = 'ticket:' .. ARGV[1]
+redis.call('HSET', tkey, 'ticketNo', no, 'status', 'WAITING', 'calledCount', 0, unpack(ARGV, 4))
+redis.call('EXPIRE', tkey, tonumber(ARGV[3]))
+redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
+redis.call('SADD', KEYS[4], ARGV[1])
+redis.call('SET', KEYS[3], ARGV[1], 'EX', 172800)
+return {ARGV[1], no}
+```
+
+**2. Bắt đầu phục vụ (`start_ticket.lua`):** kiểm tra `status == WAITING` (nếu không: trả mã `NOT_WAITING` → `CLIN_1313`), với hàng đợi Bác sĩ kiểm tra khóa `queue:busy:{doctorId}` chưa tồn tại (nếu có: `DOCTOR_BUSY` → `CLIN_1302`); rồi `HSET status IN_SERVICE startedAt …`, `SET queue:busy:{doctorId} ticketId`, `ZREM` khỏi Sorted Set (phiếu đang phục vụ không còn trong danh sách chờ).
+
+**3. Kết thúc / hủy (`finish_ticket.lua`):** `ZREM`, `SREM queue:visit:{visitId}`, `DEL queue:busy:{doctorId}` nếu đúng phiếu, `DEL ticket:{id}`.
+
+**4. Listener phát phiếu:**
+```java
+@Component
+@RequiredArgsConstructor
+public class QueueIssuerListener {
+    private final QueueRedisRepository queue;
     private final RabbitTemplate rabbitTemplate;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onVisitCompleted(VisitCompletedEvent event) {
-        rabbitTemplate.convertAndSend("clinic.events", "visit.completed", event);
+    @RabbitListener(queues = "clinical.queue-issuer.invoice-paid")
+    public void onPaid(ServiceInvoicePaidEvent e) {
+        // gom các dòng theo queueType: DOCTOR (phí khám), LABORATORY, IMAGING; dòng không có queueType bỏ qua
+        e.lines().stream().filter(l -> l.queueType() != null)
+                .collect(Collectors.groupingBy(ServiceInvoicePaidEvent.Line::queueType))
+                .forEach((type, lines) -> {
+                    UUID owner = type == QueueType.DOCTOR ? e.doctorId() : null;   // null -> UNASSIGNED / ALL
+                    IssuedTicket t = queue.issue(e.eventId() + ":" + type, type, owner, e.visitId(),
+                            e.emergency() ? 2 : 0, e.paidAt(), lines, e.cashierId(), e.petName(), e.ownerName());
+                    rabbitTemplate.convertAndSend("clinic.events", "queue.ticket_issued", QueueTicketIssuedEvent.of(t));
+                });
+        // Lỗi Redis -> ném ngoại lệ -> RabbitMQ retry -> DLQ; khóa dedupe bảo đảm không phát 2 phiếu
     }
 }
 ```
 
-**Cấu hình Message Converter chuẩn JSON:**
-```java
-@Configuration
-public class RabbitConfig {
-    @Bean
-    public MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
-        return new Jackson2JsonMessageConverter(objectMapper);
-    }
-}
-```
+**5. Bắt đầu khám và ghi lịch sử phiếu:** xem `PetVisitServiceImpl.startExamination` (11.2 mục 6) – giao dịch MySQL đổi trạng thái đợt khám; `afterCommit` chạy `start_ticket.lua`. Khi phiếu kết thúc (Bác sĩ chỉ định CLS / chốt ca; dịch vụ cuối của phiếu phòng xong / hủy), service đọc Hash phiếu từ Redis, rồi trong giao dịch MySQL ghi `queue_ticket_histories` (+ `queue_ticket_history_items`) cùng thay đổi nghiệp vụ, `afterCommit` chạy `finish_ticket.lua`. `ticket_id UNIQUE` chặn ghi trùng khi thử lại.
 
-**Danh mục 9 Sự kiện & Routing Keys chuẩn v3.0** (Exchange `clinic.events`; khớp 100% với `THIET_KE_KIEN_TRUC_MICROSERVICES.md` mục 5.2 – Lộ trình mã nguồn bắt buộc dùng đúng các tên này):
+**6. Dựng lại hàng đợi (`QueueRebuildJob`):** chạy khi khởi động nếu không có khóa `queue:meta:{date}` và có thể gọi tay từ trang quản trị. Dựng phiếu `DOCTOR` cho đợt khám `WAITING` đã thu phí khám hoặc cấp cứu, và `RESULTS_READY` (`priority 1`); phiếu `LABORATORY` / `IMAGING` cho dịch vụ `PENDING` có hóa đơn `PAID` chưa có lịch sử phiếu `DONE`; thứ tự theo `paid_at` / `checked_in_at`; số phiếu cấp lại từ 1.
 
-| Tên Event Class | Routing Key | Dịch vụ Phát (Producer) | Dịch vụ Nhận (Consumer) |
-| :--- | :--- | :--- | :--- |
-| `AppointmentBookedEvent` | `appointment.booked` | `appointment-service` | `notification-service` |
-| `AppointmentStatusChangedEvent` | `appointment.status_changed` | `appointment-service` | `notification-service` |
-| `AppointmentNoShowEvent` | `appointment.no_show` | `appointment-service` | `notification-service` |
-| `VisitCheckedInEvent` | `visit.checked_in` | `clinical-service` | `appointment-service` (chuyển lịch `CHECKED_IN`), `notification-service` |
-| `PatientCalledEvent` | `visit.patient_called` | `clinical-service` | `notification-service` |
-| `ParaclinicalResultsReadyEvent` | `visit.results_ready` | `clinical-service` | `notification-service` |
-| `VisitCompletedEvent` | `visit.completed` | `clinical-service` | `notification-service` |
-| `MedicineInvoicePaidEvent` | `pharmacy.medicine_invoice_paid` | `billing-pharmacy-service` | `notification-service` |
-| `MedicineLowStockEvent` | `pharmacy.low_stock` | `billing-pharmacy-service` | `notification-service` |
-
-**Quy tắc Consumer:**
-- **Idempotent:** kiểm tra trạng thái hiện tại trước khi cập nhật (ví dụ `appointment-service` chỉ chuyển `CONFIRMED → CHECKED_IN`; nhận trùng thì bỏ qua).
-- **Retry & DLQ:** cấu hình retry 3 lần (backoff 1s, 2s, 4s); thất bại thì đẩy vào `<queue>.dlq` để xử lý tay, không nuốt lỗi.
-- **Đã bỏ:** `VisitClosedToPaymentEvent`, `PaymentAndDispenseCompletedEvent` (ca khám hoàn tất bằng giao dịch cục bộ ở `clinical-service`), cùng các tên cũ `AppointmentCreatedEvent`, `DoctorPriorityCallbackEvent`, `LowStockEvent`.
+**7. Cấu hình Redis:** `spring.data.redis.host/port`, `timeout: 1s`; lỗi kết nối khi đọc hàng đợi → `CLIN_1318`. Docker: `redis:7-alpine --appendonly yes --appendfsync everysec`.
 
 ---
 
@@ -911,10 +1071,10 @@ public class RabbitConfig {
 ### 10.1. Bảo vệ Toàn vẹn tại Spring Cloud Gateway
 > [!CAUTION]
 > **Quy tắc Phòng chống Giả mạo Quyền & Trả đúng mã lỗi:**
-> 1. Kẻ xấu có thể tự thêm Header `X-User-Role: ADMIN` từ bên ngoài. Gateway **xóa toàn bộ** các Headers này trước khi giải mã JWT và gán Headers nội bộ mới.
+> 1. Kẻ xấu có thể tự thêm Header `X-User-Roles: ADMIN` từ bên ngoài. Gateway **xóa toàn bộ** các Headers này trước khi giải mã JWT và gán Headers nội bộ mới.
 > 2. Với route **không công khai**, nếu thiếu / sai / hết hạn token, Gateway **trả ngay `401` (SYS_1002)**, không chuyển tiếp request. Nhờ đó Axios Interceptor nhận `401` và tự gọi `/api/v1/auth/refresh`. (Nếu Gateway chuyển tiếp request không có header, service bên dưới sẽ trả `403`, Frontend không biết cần làm mới token.)
 > 3. Gateway chặn mọi request tới `/internal/**` từ bên ngoài.
-> 4. Claim `role` chứa mã vai trò **không có tiền tố** (`VETERINARIAN`); header `X-User-Role` chuyển nguyên giá trị đó.
+> 4. Claim `roles` là **danh sách** mã vai trò **không có tiền tố** (`["VETERINARIAN", "ADMIN"]`, v4.0: một tài khoản có thể nhiều vai trò qua `user_roles`); header `X-User-Roles` nối các mã bằng dấu phẩy. Claim `sub` / header `X-User-Id` là UUID dạng chuỗi.
 
 ```java
 @Component
@@ -940,7 +1100,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         // 1. XÓA HEADER NỘI BỘ NẾU CLIENT CỐ TÌNH TRUYỀN VÀO ĐỂ GIẢ MẠO
         ServerHttpRequest.Builder builder = request.mutate()
-                .headers(h -> { h.remove("X-User-Id"); h.remove("X-User-Role"); });
+                .headers(h -> { h.remove("X-User-Id"); h.remove("X-User-Roles"); });
 
         boolean isPublic = PUBLIC_PATHS.stream().anyMatch(p -> matcher.match(p, path));
         String token = extractBearerToken(request);
@@ -955,8 +1115,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         // 3. Gán Header chính thống từ Claims (role KHÔNG có tiền tố ROLE_)
         Claims claims = jwtValidator.getClaims(token);
-        builder.header("X-User-Id", String.valueOf(claims.get("userId")));
-        builder.header("X-User-Role", claims.get("role", String.class));
+        builder.header("X-User-Id", claims.getSubject());                                   // UUID chuỗi
+        builder.header("X-User-Roles", String.join(",", claims.get("roles", List.class)));
         return chain.filter(exchange.mutate().request(builder.build()).build());
     }
 
@@ -977,7 +1137,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
 ### 10.2. Phân quyền Phương thức tại Microservices Con & HeaderAuthenticationFilter
 
-Mỗi Microservice servlet không giải mã lại JWT, mà dùng một Filter không trạng thái đọc `X-User-Id` và `X-User-Role` do Gateway chuyển tiếp, rồi nạp vào `SecurityContextHolder`. Các lớp dưới đây nằm trong `com.vetclinic.common.web` và được nạp bằng `CommonWebAutoConfiguration` (mục 2.2), **không gắn `@Component`** (nếu gắn, Spring Boot sẽ tự đăng ký filter vào servlet container một lần nữa, khiến filter chạy hai lần).
+Mỗi Microservice servlet không giải mã lại JWT, mà dùng một Filter không trạng thái đọc `X-User-Id` và `X-User-Roles` do Gateway chuyển tiếp, rồi nạp vào `SecurityContextHolder`. Các lớp dưới đây nằm trong `com.vetclinic.common.web` và được nạp bằng `CommonWebAutoConfiguration` (mục 2.2), **không gắn `@Component`** (nếu gắn, Spring Boot sẽ tự đăng ký filter vào servlet container một lần nữa, khiến filter chạy hai lần).
 
 #### 1. Lớp `HeaderAuthenticationFilter`
 ```java
@@ -993,6 +1153,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 public class HeaderAuthenticationFilter extends OncePerRequestFilter {
@@ -1004,13 +1165,15 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String userId = request.getHeader("X-User-Id");
-        String userRole = request.getHeader("X-User-Role");
+        String roles = request.getHeader("X-User-Roles");          // "VETERINARIAN,ADMIN"
 
-        if (userId != null && userRole != null) {
-            // Thêm tiền tố ROLE_ đúng MỘT lần (phòng thủ nếu giá trị đã có tiền tố -> tránh ROLE_ROLE_)
-            String authority = userRole.startsWith(ROLE_PREFIX) ? userRole : ROLE_PREFIX + userRole;
-            var authentication = new UsernamePasswordAuthenticationToken(
-                    userId, null, List.of(new SimpleGrantedAuthority(authority)));
+        if (userId != null && roles != null) {
+            // Thêm tiền tố ROLE_ đúng MỘT lần cho từng vai trò (tránh ROLE_ROLE_)
+            List<SimpleGrantedAuthority> authorities = Arrays.stream(roles.split(","))
+                    .map(String::trim).filter(r -> !r.isEmpty())
+                    .map(r -> new SimpleGrantedAuthority(r.startsWith(ROLE_PREFIX) ? r : ROLE_PREFIX + r))
+                    .toList();
+            var authentication = new UsernamePasswordAuthenticationToken(userId, null, authorities);
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
         filterChain.doFilter(request, response);
@@ -1031,14 +1194,14 @@ public final class SecurityUtils {
 
     private SecurityUtils() {}
 
-    public static Long getCurrentUserId() {
+    public static UUID getCurrentUserId() {                       // v4.0: khóa người dùng là UUID
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getPrincipal() == null) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
         try {
-            return Long.parseLong(authentication.getPrincipal().toString());
-        } catch (NumberFormatException e) {
+            return UUID.fromString(authentication.getPrincipal().toString());
+        } catch (IllegalArgumentException e) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
     }
@@ -1134,8 +1297,8 @@ Nhằm đảm bảo an toàn cao nhất trước nguy cơ lộ lọt JWT nhưng 
 #### 1. Bảng Thông số Thời hạn & Chiến lược Token
 | Loại Token | Thời hạn sống (TTL) | Nơi lưu trữ / Quản lý | Nội dung / Payload |
 | :--- | :---: | :--- | :--- |
-| **Access Token** | **30 phút** (1,800 giây) | Ký số JWT (HMAC-SHA256), Stateless | `userId`, `username`, `role` (mã vai trò **không có tiền tố**, ví dụ `VETERINARIAN`; tiền tố `ROLE_` chỉ thêm tại `HeaderAuthenticationFilter`), `roomNumber`, `exp`, `iat` |
-| **Refresh Token** | **7 ngày** (604,800 giây) | Chuỗi ngẫu nhiên (UUID v4), Stateful lưu bảng `refresh_tokens` trong `pet_clinic_auth_db` | Khóa ngẫu nhiên ánh xạ tới `userId`, có cờ `revoked` và `expiry_date` |
+| **Access Token** | **30 phút** (1,800 giây) | Ký số JWT (HMAC-SHA256), Stateless | `sub` (userId UUID), `username`, `fullName`, `roles` (danh sách mã vai trò **không có tiền tố**; tiền tố `ROLE_` chỉ thêm tại `HeaderAuthenticationFilter`), `exp`, `iat` |
+| **Refresh Token** | **7 ngày** (604,800 giây) | Chuỗi ngẫu nhiên 256 bit (`SecureRandom`, Base64URL) trả cho client; CSDL chỉ lưu **SHA-256** của chuỗi (`refresh_tokens.token_hash`) | Ánh xạ tới `user_id`, có cờ `revoked` và `expiry_date`. Lộ CSDL không dùng lại được token |
 
 #### 2. Nguyên tắc An ninh Xoay Vòng Token (Refresh Token Rotation)
 1. **Một lần dùng duy nhất (Single-Use):** Mỗi khi một Refresh Token được sử dụng để lấy Access Token mới thành công, nó **ngay lập tức bị đánh dấu là `revoked = TRUE`**. Một Refresh Token mới tinh sẽ được tạo ra thay thế.
@@ -1198,7 +1361,7 @@ public class RefreshTokenServiceImpl {
 
     @Transactional
     public TokenRefreshResponse refresh(String tokenStr) {
-        RefreshToken token = refreshTokenRepository.findByToken(tokenStr)
+        RefreshToken token = refreshTokenRepository.findByTokenHash(TokenHasher.sha256(tokenStr))   // v4.0: tra theo giá trị băm
                 .orElseThrow(() -> new AppException(ErrorCode.REFRESH_TOKEN_NOT_FOUND));
 
         // 1. Phát hiện xâm nhập: Token đã bị thu hồi mà vẫn cố sử dụng
@@ -1220,21 +1383,25 @@ public class RefreshTokenServiceImpl {
         refreshTokenRepository.save(token);
 
         User user = token.getUser();
-        String newAccessToken = jwtTokenProvider.generateAccessToken(user);
-        RefreshToken newRefreshToken = RefreshToken.builder()
+        if (user.getStatus() != UserStatus.ACTIVE) {                       // tài khoản bị khóa / ngừng: không làm mới
+            refreshTokenRepository.revokeAllUserTokens(user.getId());
+            throw new AppException(ErrorCode.ACCOUNT_DISABLED);           // AUTH_1107
+        }
+        String newAccessToken = jwtTokenProvider.generateAccessToken(user);   // roles lấy từ user_roles
+        String rawToken = TokenHasher.randomToken();                          // 256 bit, chỉ trả cho client
+        refreshTokenRepository.save(RefreshToken.builder()
                 .user(user)
-                .token(UUID.randomUUID().toString())
+                .tokenHash(TokenHasher.sha256(rawToken))
                 .expiryDate(Instant.now().plus(7, ChronoUnit.DAYS))
                 .revoked(false)
-                .build();
-        refreshTokenRepository.save(newRefreshToken);
+                .build());
 
-        return new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken(), "Bearer", 1800);
+        return new TokenRefreshResponse(newAccessToken, rawToken, "Bearer", 1800);
     }
 
     @Transactional
     public void logout(String tokenStr) {
-        refreshTokenRepository.findByToken(tokenStr).ifPresent(token -> {
+        refreshTokenRepository.findByTokenHash(TokenHasher.sha256(tokenStr)).ifPresent(token -> {
             token.setRevoked(true);
             refreshTokenRepository.save(token);
         });
@@ -1281,6 +1448,7 @@ Cấu hình tích hợp chuẩn giữa **Java 21**, **Spring Boot 4.1.1**, **Spr
         <module>clinical-service</module>
         <module>billing-pharmacy-service</module>
         <module>notification-service</module>
+        <module>reporting-service</module>
     </modules>
 
     <properties>
@@ -1385,369 +1553,218 @@ Kèm file `src/main/resources/META-INF/spring/org.springframework.boot.autoconfi
 
 ### 11.2. Mẫu Mã Nguồn Tham Chiếu Chuẩn (Gold Standard Vertical Slice)
 
-Dưới đây là một lát cắt hoàn chỉnh (Vertical Slice) cho nghiệp vụ **Bác sĩ bắt đầu khám lâm sàng Giai đoạn 1 (UC-22)** trong `clinical-service`, làm hình mẫu chuẩn mực để toàn bộ các thành viên tham chiếu và phát triển các tính năng khác:
+Lát cắt hoàn chỉnh cho nghiệp vụ **Bác sĩ bắt đầu khám lâm sàng Giai đoạn 1 (UC-22, T02)** trong `clinical-service` theo lược đồ v4.0: đợt khám (`pet_visits`) chỉ giữ thông tin hành chính; sinh hiệu ghi ở `vital_signs`; nội dung chuyên môn ở `medical_records` (tạo khi bắt đầu khám); phiếu xếp hàng nằm trên Redis.
 
-#### 1. Request DTO (`StartExaminationRequest.java`)
-Bác sĩ bấm "Bắt đầu khám" ngay khi bệnh nhân bước vào phòng, nên sinh hiệu **không bắt buộc** ở bước này (Bác sĩ có thể nhập kèm hoặc cập nhật sau). Cân nặng và thân nhiệt là điều kiện bắt buộc khi gửi chỉ định cận lâm sàng / chốt ca (lỗi `CLIN_1308`).
+#### 1. Request DTO (`StartExaminationRequest.java`, `VitalSignsRequest.java`)
+Sinh hiệu **không bắt buộc** khi bấm "Bắt đầu khám" (Bác sĩ có thể nhập ngay hoặc thêm sau bằng `POST …/vital-signs`). Trước khi gửi chỉ định cận lâm sàng / chốt ca phải có ít nhất một lần đo có cân nặng và thân nhiệt (`CLIN_1308`).
 
 ```java
 package com.vetclinic.clinical.dto.request;
 
-import jakarta.validation.constraints.*;
-import lombok.*;
+public record VitalSignsRequest(
+        @DecimalMin("0.1") @DecimalMax("150.0") BigDecimal weightKg,
+        @DecimalMin("30.0") @DecimalMax("45.0") BigDecimal temperatureC,
+        @Min(10) @Max(400) Integer heartRateBpm,
+        @Min(5) @Max(200) Integer respiratoryRateBpm,
+        @Min(1) @Max(9) Integer bodyConditionScore,
+        @Size(max = 30) String mucousMembraneColor,
+        @DecimalMin("0.0") @DecimalMax("10.0") BigDecimal capillaryRefillSec,
+        @Size(max = 255) String notes) {}
 
-import java.math.BigDecimal;
-
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class StartExaminationRequest {
-
-    @DecimalMin(value = "0.1", message = "Cân nặng phải lớn hơn 0.1 kg")
-    @DecimalMax(value = "150.0", message = "Cân nặng không hợp lý (tối đa 150 kg)")
-    private BigDecimal weightAtVisit; // Bác sĩ trực tiếp cân tại phòng khám (có thể để trống ở bước này)
-
-    @DecimalMin(value = "35.0", message = "Thân nhiệt đo được quá thấp (tối thiểu 35°C)")
-    @DecimalMax(value = "43.0", message = "Thân nhiệt đo được quá cao (tối đa 43°C)")
-    private BigDecimal temperature;   // Bác sĩ trực tiếp đo nhiệt độ
-
-    @Size(max = 1000, message = "Ghi chú triệu chứng lâm sàng không được vượt quá 1000 ký tự")
-    private String clinicalNotes;
-
-    private Long examinationServiceId; // Dịch vụ khám (nhóm EXAMINATION); null = "Khám tổng quát" mặc định
-}
+public record StartExaminationRequest(
+        @Valid VitalSignsRequest vitalSigns,                 // có thể null
+        @Size(max = 4000) String anamnesis) {}                // bệnh sử chủ nuôi kể, ghi vào medical_records
 ```
 
 #### 2. Response DTO (`PetVisitResponse.java`)
-Bảng `pet_visits` v3.0 không còn `started_at`, `closed_at`, `completed_at`, `assigned_room`; các thời điểm lấy từ `pet_visit_status_histories` khi cần, số phòng lấy từ `auth-service`.
-
 ```java
-package com.vetclinic.clinical.dto.response;
-
-import com.vetclinic.clinical.constant.VisitStatus;
-import lombok.*;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class PetVisitResponse {
-    private Long id;
-    private String visitCode;
-    private Long petId;
-    private String petName;        // Lấy từ Entity Pet nội bộ clinical-service
-    private String speciesName;    // Lấy từ Entity Species nội bộ
-    private Long doctorId;
-    private String doctorName;     // Làm giàu qua OpenFeign gọi auth-service (ngoài transaction)
-    private String roomNumber;     // users.room_number của Bác sĩ (ngoài transaction)
-    private Long receptionistId;
-    private boolean emergency;
-    private BigDecimal weightAtVisit;
-    private BigDecimal temperature;
-    private String initialSymptoms;
-    private String clinicalNotes;
-    private VisitStatus status;
-    private Instant checkedInAt;
-}
+public record PetVisitResponse(
+        UUID id, String visitCode,
+        UUID petId, String petName, String speciesName,
+        String ownerName,                 // pets.owner_name_snapshot – không gọi auth-service
+        UUID doctorId, String doctorName, // pet_visits.doctor_name_snapshot – không gọi auth-service
+        String roomNumber,                // phòng của Bác sĩ: cache đọc từ auth-service (có fallback)
+        boolean emergency, String reasonForVisit,
+        VisitStatus status, Instant checkedInAt,
+        VitalSignsResponse latestVitalSigns,
+        Integer queueTicketNo) {}         // số phiếu DOCTOR hiện tại (đọc Redis), null nếu không có
 ```
 
 #### 3. MapStruct Mapper (`PetVisitMapper.java`)
 ```java
-package com.vetclinic.clinical.mapper;
-
-import com.vetclinic.clinical.dto.request.StartExaminationRequest;
-import com.vetclinic.clinical.dto.response.PetVisitResponse;
-import com.vetclinic.clinical.entity.PetVisit;
-import org.mapstruct.*;
-
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.WARN)
 public interface PetVisitMapper {
-
+    @Mapping(target = "petId", source = "pet.id")
     @Mapping(target = "petName", source = "pet.name")
     @Mapping(target = "speciesName", source = "pet.species.name")
-    @Mapping(target = "doctorName", ignore = true)
+    @Mapping(target = "ownerName", source = "pet.ownerNameSnapshot")
+    @Mapping(target = "doctorName", source = "doctorNameSnapshot")
+    @Mapping(target = "emergency", source = "emergency")
     @Mapping(target = "roomNumber", ignore = true)
+    @Mapping(target = "latestVitalSigns", ignore = true)
+    @Mapping(target = "queueTicketNo", ignore = true)
     PetVisitResponse toResponse(PetVisit entity);
 
-    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(target = "examinationServiceId", ignore = true)
-    void updateExamInfo(StartExaminationRequest request, @MappingTarget PetVisit entity);
+    VitalSigns toEntity(VitalSignsRequest request);       // visit, recordedBy gán ở service
 }
 ```
 
-#### 4. Spring Data JPA Repository (`PetVisitRepository.java`)
+#### 4. Repository (`PetVisitRepository.java`)
 ```java
-package com.vetclinic.clinical.repository;
-
-import com.vetclinic.clinical.constant.VisitStatus;
-import com.vetclinic.clinical.entity.PetVisit;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-
 @Repository
-public interface PetVisitRepository extends JpaRepository<PetVisit, Long> {
+public interface PetVisitRepository extends JpaRepository<PetVisit, UUID> {
 
-    // T02: Bác sĩ không được có ca IN_PROGRESS khác
-    boolean existsByDoctorIdAndStatusAndIdNot(Long doctorId, VisitStatus status, Long excludeVisitId);
+    boolean existsByDoctorIdAndStatusAndIdNot(UUID doctorId, VisitStatus status, UUID excludeVisitId);   // T02
 
-    // T01: thú cưng không được có đợt khám chưa kết thúc
-    @Query("SELECT COUNT(v) > 0 FROM PetVisit v WHERE v.pet.id = :petId AND v.status NOT IN ('COMPLETED', 'CANCELLED')")
-    boolean existsOpenVisit(@Param("petId") Long petId);
+    @Query("SELECT COUNT(v) > 0 FROM PetVisit v WHERE v.pet.id = :petId AND v.status NOT IN :closed")
+    boolean existsOpenVisit(@Param("petId") UUID petId, @Param("closed") Collection<VisitStatus> closed); // T01
 
-    boolean existsByDoctorIdAndStatus(Long doctorId, VisitStatus status);
-
-    // Hàng đợi riêng của Bác sĩ (Q1): ca WAITING / RESULTS_READY, cấp cứu lên đầu, rồi queue_order
-    // Index idx_visits_queue (doctor_id, status, is_emergency, queue_order)
-    @Query("""
-            SELECT v FROM PetVisit v
-            WHERE v.doctorId = :doctorId AND v.status IN :statuses
-            ORDER BY CASE WHEN v.emergency = true THEN 0 ELSE 1 END, v.queueOrder
-            """)
-    List<PetVisit> findDoctorQueue(@Param("doctorId") Long doctorId,
-                                   @Param("statuses") Collection<VisitStatus> statuses);
-
-    // Danh sách chờ phân công: WAITING và chưa có Bác sĩ (cùng thứ tự)
-    @Query("""
-            SELECT v FROM PetVisit v
-            WHERE v.doctorId IS NULL AND v.status = :waiting
-            ORDER BY CASE WHEN v.emergency = true THEN 0 ELSE 1 END, v.queueOrder
-            """)
-    List<PetVisit> findUnassigned(@Param("waiting") VisitStatus waiting);
-
-    // Số người đang chờ của từng Bác sĩ (bảng điều phối + gợi ý Bác sĩ ít người chờ nhất)
-    @Query("SELECT v.doctorId, COUNT(v) FROM PetVisit v WHERE v.doctorId IS NOT NULL AND v.status IN :statuses GROUP BY v.doctorId")
-    List<Object[]> countWaitingByDoctor(@Param("statuses") Collection<VisitStatus> statuses);
-
-    // Ca có kết quả lên đầu hàng đợi (Q5): queue_order nhỏ nhất hiện có trong hàng đợi Bác sĩ
-    @Query("SELECT MIN(v.queueOrder) FROM PetVisit v WHERE v.doctorId = :doctorId AND v.status IN :statuses")
-    Optional<Long> findMinQueueOrder(@Param("doctorId") Long doctorId,
-                                     @Param("statuses") Collection<VisitStatus> statuses);
+    @Modifying
+    @Query("UPDATE PetVisit v SET v.doctorNameSnapshot = :name WHERE v.doctorId = :doctorId")
+    int updateDoctorNameSnapshot(@Param("doctorId") UUID doctorId, @Param("name") String name);      // listener sự kiện
 }
 ```
+Không còn `QueueTicketRepository` (JPA): hàng đợi đọc qua `QueueRedisRepository` (mục 9.3), lịch sử qua `QueueTicketHistoryRepository`.
 
-#### 5. OpenFeign Client Gọi auth-service (`UserClient.java`)
+#### 5. OpenFeign Client (`UserClient.java`)
 ```java
-package com.vetclinic.clinical.client;
-
-import com.vetclinic.clinical.dto.response.UserSummaryResponse;
-import com.vetclinic.common.dto.ApiResponse;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-
-@FeignClient(name = "auth-service", path = "/internal/users")   // endpoint nội bộ, chỉ đọc
+@FeignClient(name = "auth-service", path = "/internal/users", fallbackFactory = UserClientFallback.class)
 public interface UserClient {
-
     @GetMapping("/{id}")
-    ApiResponse<UserSummaryResponse> getUserById(@PathVariable("id") Long id); // fullName, role, roomNumber
+    ApiResponse<UserSummaryResponse> getUserById(@PathVariable("id") UUID id);   // fullName, roles, status, roomNumber
 }
 ```
+Phân công Bác sĩ gọi `getUserById` **không dùng fallback** (Facade kiểm tra vai trò `VETERINARIAN` và `status = ACTIVE`, sai thì `CLIN_1316`); hiển thị số phòng dùng bản có fallback.
 
-#### 6. Service Implementation (`PetVisitServiceImpl.java`) – chỉ thao tác CSDL nội bộ trong giao dịch
+#### 6. Service Implementation (`PetVisitServiceImpl.java`)
 ```java
-package com.vetclinic.clinical.service.impl;
-
-import com.vetclinic.clinical.constant.*;
-import com.vetclinic.clinical.dto.request.StartExaminationRequest;
-import com.vetclinic.clinical.dto.response.PetVisitResponse;
-import com.vetclinic.clinical.entity.*;
-import com.vetclinic.clinical.mapper.PetVisitMapper;
-import com.vetclinic.clinical.repository.*;
-import com.vetclinic.clinical.service.PetVisitService;
-import com.vetclinic.common.exception.AppException;
-import com.vetclinic.common.exception.ErrorCode;
-import com.vetclinic.common.util.SecurityUtils;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.util.Objects;
-
 @Service
 @RequiredArgsConstructor
 public class PetVisitServiceImpl implements PetVisitService {
 
     private final PetVisitRepository petVisitRepository;
     private final PetVisitStatusHistoryRepository statusHistoryRepository;
-    private final ClinicServiceRepository clinicServiceRepository;           // bảng services
+    private final MedicalRecordRepository medicalRecordRepository;
+    private final VitalSignsRepository vitalSignsRepository;
     private final VisitServiceDetailRepository serviceDetailRepository;
     private final VisitServiceDetailHistoryRepository serviceDetailHistoryRepository;
-    private final ServiceInvoiceRepository serviceInvoiceRepository;
-    private final InvoiceCodeGenerator invoiceCodeGenerator;
-    private final PetVisitMapper petVisitMapper;
+    private final QueueRedisRepository queue;
+    private final PetVisitMapper mapper;
 
-    /** T02 – Bác sĩ bắt đầu khám Giai đoạn 1 (UC-22). */
+    /** T02 – Bác sĩ bấm "Bắt đầu" khi bệnh nhân vào phòng (UC-22). Phí khám đã thu, phiếu DOCTOR đang WAITING. */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public PetVisitResponse startExamination(Long visitId, StartExaminationRequest request) {
-        Long currentDoctorId = SecurityUtils.getCurrentUserId();
-
+    public PetVisitResponse startExamination(UUID visitId, StartExaminationRequest request) {
+        UUID doctorId = SecurityUtils.getCurrentUserId();
         PetVisit visit = petVisitRepository.findById(visitId)
                 .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
 
-        // 1. Trạng thái nguồn phải là WAITING
-        if (visit.getStatus() != VisitStatus.WAITING) {
-            throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION,
-                    "Chỉ có thể bắt đầu khám đối với ca đang ở trạng thái Chờ khám (WAITING)");
+        if (visit.getStatus() != VisitStatus.WAITING) throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);
+        if (!doctorId.equals(visit.getDoctorId())) throw new AppException(ErrorCode.NOT_ASSIGNED_DOCTOR);
+        if (petVisitRepository.existsByDoctorIdAndStatusAndIdNot(doctorId, VisitStatus.IN_PROGRESS, visitId)) {
+            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE);
         }
-        // 2. Ca phải được Lễ tân phân công cho chính Bác sĩ này (doctor_id gán ở bước phân công, không gán ở đây)
-        if (!Objects.equals(visit.getDoctorId(), currentDoctorId)) {
-            throw new AppException(ErrorCode.NOT_ASSIGNED_DOCTOR);
-        }
-        // 3. Bác sĩ không có ca IN_PROGRESS khác
-        if (petVisitRepository.existsByDoctorIdAndStatusAndIdNot(currentDoctorId, VisitStatus.IN_PROGRESS, visitId)) {
-            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE, "Bác sĩ đang có một ca khám khác chưa kết thúc!");
-        }
+        // Phiếu DOCTOR đang chờ của ca (đọc Redis, không khóa) – không có nghĩa là chưa nộp phí khám (BR-35)
+        QueueTicketView ticket = queue.findOpenTicket(visitId, QueueType.DOCTOR)
+                .filter(t -> t.status() == TicketStatus.WAITING)
+                .orElseThrow(() -> new AppException(ErrorCode.NO_QUEUE_TICKET));
 
-        // 4. Cập nhật sinh hiệu (nếu có) và chuyển trạng thái; @Version chống bấm trùng
-        petVisitMapper.updateExamInfo(request, visit);
+        // 1. Đợt khám (hành chính) đổi trạng thái + lịch sử; @Version chống bấm trùng
         visit.setStatus(VisitStatus.IN_PROGRESS);
-        statusHistoryRepository.save(PetVisitStatusHistory.of(visit.getId(),
-                VisitStatus.WAITING, VisitStatus.IN_PROGRESS, currentDoctorId,
-                "Bác sĩ bắt đầu khám lâm sàng Giai đoạn 1"));          // thời điểm bắt đầu = created_at
+        statusHistoryRepository.save(PetVisitStatusHistory.of(visit, VisitStatus.WAITING, VisitStatus.IN_PROGRESS,
+                doctorId, "Bác sĩ bắt đầu khám lâm sàng Giai đoạn 1"));
 
-        // 5. Phí khám là một dịch vụ: tạo chỉ định EXAMINATION (IN_PROGRESS) + 1 hóa đơn dịch vụ PENDING
-        ClinicService exam = request.getExaminationServiceId() != null
-                ? clinicServiceRepository.findByIdAndCategoryAndActiveTrue(request.getExaminationServiceId(), ServiceCategory.EXAMINATION)
-                        .orElseThrow(() -> new AppException(ErrorCode.INVALID_INPUT_DATA))
-                : clinicServiceRepository.findDefaultExamination();
-        VisitServiceDetail detail = serviceDetailRepository.save(VisitServiceDetail.builder()
-                .visit(visit).service(exam).quantity(1).status(ServiceDetailStatus.IN_PROGRESS)
-                .queueOrder(QueueOrders.now())                // cột NOT NULL; dịch vụ khám không vào hàng đợi CLS
-                .build());
-        serviceDetailHistoryRepository.save(VisitServiceDetailHistory.of(detail.getId(),
-                null, ServiceDetailStatus.IN_PROGRESS, "ORDERED", currentDoctorId, null));
-        serviceInvoiceRepository.save(ServiceInvoice.builder()
-                .invoiceCode(invoiceCodeGenerator.next("SINV"))
-                .visitServiceDetail(detail)
-                .unitPrice(exam.getPrice())                  // snapshot đơn giá (BR-25)
-                .vatRate(exam.getVatRate())                  // snapshot thuế suất
-                .discountAmount(BigDecimal.ZERO)
-                .paymentStatus(PaymentStatus.PENDING)
-                .build());
+        // 2. Hồ sơ khám chuyên môn (1–1) được tạo ở bước này
+        medicalRecordRepository.save(MedicalRecord.open(visit, request.anamnesis()));
 
-        return petVisitMapper.toResponse(visit);
+        // 3. Sinh hiệu (nếu Bác sĩ nhập ngay)
+        if (request.vitalSigns() != null) {
+            VitalSigns vs = mapper.toEntity(request.vitalSigns());
+            vs.setVisit(visit); vs.setRecordedBy(doctorId);
+            vitalSignsRepository.save(vs);
+        }
+
+        // 4. Dịch vụ khám chuyển IN_PROGRESS + lịch sử
+        VisitServiceDetail exam = serviceDetailRepository.findExaminationOfVisit(visitId)
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_STATUS_TRANSITION));
+        exam.setStatus(ServiceDetailStatus.IN_PROGRESS);
+        serviceDetailHistoryRepository.save(VisitServiceDetailHistory.of(exam, ServiceDetailStatus.PENDING,
+                ServiceDetailStatus.IN_PROGRESS, ServiceDetailAction.START_PROCESSING, doctorId, null));
+
+        // 5. Chỉ sau khi commit mới đổi phiếu trên Redis (rollback thì phiếu giữ nguyên WAITING)
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() { queue.start(ticket.ticketId(), doctorId); }   // start_ticket.lua
+        });
+        return mapper.toResponse(visit);
     }
 }
 ```
+> Nếu `queue.start` lỗi sau commit (Redis vừa mất kết nối), đợt khám vẫn `IN_PROGRESS` – trạng thái nghiệp vụ đúng; phiếu được `QueueReconcileJob` (mỗi phút) chuyển `IN_SERVICE` theo trạng thái đợt khám. Hai Bác sĩ / hai lần bấm đồng thời bị chặn bởi `@Version` của `PetVisit` (MySQL) và kiểm tra trong `start_ticket.lua` (Redis).
 
-#### 6b. Hàng đợi riêng của Bác sĩ: Gọi theo từng dòng (`DoctorQueueServiceImpl.java`)
-
-Áp dụng quy tắc Q1–Q5 (State Machine mục 2.4, BR-34). "Gọi" **không đổi trạng thái và không đổi thứ tự** ca nên không ghi `pet_visit_status_histories` và không sửa `queue_order`. Hàng đợi phòng Xét nghiệm / CĐHA (`ParaclinicServiceImpl`) dùng cùng nguyên tắc cho `VisitServiceDetail`, nhưng các chỉ định `PENDING` của cùng một đợt khám trong cùng phòng được **gộp thành một ca** (gọi một lần, bắt đầu cả ca).
-
-```java
-package com.vetclinic.clinical.util;
-
-public final class QueueOrders {
-    private QueueOrders() {}
-
-    /** Giá trị khởi tạo: thời điểm hiện tại tính theo micro giây (ca đến trước nhỏ hơn). */
-    public static long now() {
-        java.time.Instant t = java.time.Instant.now();
-        return t.getEpochSecond() * 1_000_000L + t.getNano() / 1_000L;
-    }
-}
-```
+#### 6b. Gọi số theo từng dòng (`QueueTicketServiceImpl.java`)
+"Gọi" / "Gọi lại" **không đổi trạng thái hay thứ tự**: chỉ tăng `calledCount`, cập nhật `lastCalledAt` trên Hash phiếu (Redis) và gửi `PatientCalledEvent`. Không có giao dịch MySQL, không ghi lịch sử.
 
 ```java
 @Service
 @RequiredArgsConstructor
-public class DoctorQueueServiceImpl implements DoctorQueueService {
+public class QueueTicketServiceImpl implements QueueTicketService {
 
-    private static final List<VisitStatus> IN_QUEUE = List.of(VisitStatus.WAITING, VisitStatus.RESULTS_READY);
-
+    private final QueueRedisRepository queue;
     private final PetVisitRepository petVisitRepository;
-    private final ApplicationEventPublisher eventPublisher;
-    private final PetVisitMapper petVisitMapper;
+    private final UserRoomResolver roomResolver;
+    private final RabbitTemplate rabbitTemplate;
 
-    /** Q3 – "Gọi số tiếp theo": phím tắt gọi người đứng đầu (UC-22 Bước 1, UC-30 Bước 2). Ca chưa đổi trạng thái. */
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public PetVisitResponse callNext() {
-        Long doctorId = SecurityUtils.getCurrentUserId();
-        assertNotExamining(doctorId);                                           // BR-12
-        PetVisit head = petVisitRepository.findDoctorQueue(doctorId, IN_QUEUE).stream().findFirst()
+    public QueueTicketView callNext(QueueType type) {
+        UUID userId = SecurityUtils.getCurrentUserId();
+        QueueTicketView head = queue.peekHead(type, type == QueueType.DOCTOR ? userId : null)   // ZRANGE 0 0
                 .orElseThrow(() -> new AppException(ErrorCode.QUEUE_EMPTY));
-        eventPublisher.publishEvent(new PatientCalledEvent(head.getId(), doctorId, "DOCTOR_ROOM"));
-        return petVisitMapper.toResponse(head);
+        return doCall(head, userId);
     }
 
-    /**
-     * Q3 – "Gọi" một ca bất kỳ trong hàng đợi của mình (không nhất thiết đứng đầu). Khách vắng thì gọi ca khác; khách quay lại thì gọi lại.
-     * Chỉ phát PatientCalledEvent: KHÔNG đổi trạng thái, KHÔNG đổi queue_order.
-     */
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public PetVisitResponse call(Long visitId) {
-        Long doctorId = SecurityUtils.getCurrentUserId();
-        PetVisit visit = petVisitRepository.findById(visitId)
-                .orElseThrow(() -> new AppException(ErrorCode.VISIT_NOT_FOUND));
-        if (!doctorId.equals(visit.getDoctorId())) {
-            throw new AppException(ErrorCode.NOT_ASSIGNED_DOCTOR);              // CLIN_1311
+    public QueueTicketView call(UUID ticketId) {
+        UUID userId = SecurityUtils.getCurrentUserId();
+        QueueTicketView t = queue.find(ticketId).orElseThrow(() -> new AppException(ErrorCode.TICKET_NOT_FOUND));
+        if (t.queueType() == QueueType.DOCTOR && !userId.equals(t.doctorId())) {
+            throw new AppException(ErrorCode.NOT_ASSIGNED_DOCTOR);                         // CLIN_1311
         }
-        if (!IN_QUEUE.contains(visit.getStatus())) {
-            throw new AppException(ErrorCode.INVALID_STATUS_TRANSITION);        // chỉ gọi ca WAITING / RESULTS_READY
-        }
-        assertNotExamining(doctorId);                                           // CLIN_1302: đang khám dở thì chưa gọi thêm
-        eventPublisher.publishEvent(new PatientCalledEvent(visit.getId(), doctorId, "DOCTOR_ROOM"));
-        return petVisitMapper.toResponse(visit);
+        return doCall(t, userId);
     }
 
-    private void assertNotExamining(Long doctorId) {
-        if (petVisitRepository.existsByDoctorIdAndStatus(doctorId, VisitStatus.IN_PROGRESS)) {
-            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE);
+    private QueueTicketView doCall(QueueTicketView t, UUID userId) {
+        if (t.status() != TicketStatus.WAITING) throw new AppException(ErrorCode.TICKET_NOT_WAITING);   // CLIN_1313
+        if (t.queueType() == QueueType.DOCTOR
+                && petVisitRepository.existsByDoctorIdAndStatusAndIdNot(userId, VisitStatus.IN_PROGRESS, t.visitId())) {
+            throw new AppException(ErrorCode.DOCTOR_NOT_AVAILABLE);                        // BR-12
         }
+        QueueTicketView called = queue.markCalled(t.ticketId(), Instant.now());              // HINCRBY + HSET
+        rabbitTemplate.convertAndSend("clinic.events", "visit.patient_called",
+                PatientCalledEvent.of(called, roomResolver.roomOf(userId)));               // gửi trực tiếp (chỉ hiển thị)
+        return called;
     }
 }
 ```
+> Phân công Bác sĩ (`assign-doctor`) cập nhật `pet_visits.doctor_id`, `doctor_name_snapshot` trong giao dịch MySQL, `afterCommit` chuyển phiếu `DOCTOR` đang chờ sang Sorted Set của Bác sĩ mới (giữ `score`, giữ số phiếu – Lua `move_ticket.lua`). Ca có kết quả CLS (T06) ghi outbox `ParaclinicalResultsReadyEvent`; `QueueIssuerListener` phát phiếu `priority = 1`.
 
-> **Lưu ý (cập nhật 13/11/2026):** bản v3.0 đầu tiên dùng "Đẩy lùi 1 bậc" (ca xuống ngay sau người kế tiếp). Khi hai ca đầu hàng cùng vắng, hai ca đó đổi chỗ cho nhau mãi (`[A, B, C, D]`: lùi `A` → `[B, A, C, D]`; lùi `B` → `[A, B, C, D]`) nên ca thứ ba, thứ tư không bao giờ được gọi, và ca cấp cứu bị lùi còn mất ưu tiên. Vì vậy giao diện dùng "Gọi" theo từng dòng; API `skip` cùng cột `skip_count` đã được xóa. Khi T06 đưa ca về `RESULTS_READY`, đặt `queueOrder = findMinQueueOrder(doctorId, IN_QUEUE).orElse(QueueOrders.now()) - 1`. Phân công (`assign-doctor`) chỉ kiểm tra ca còn `WAITING` và Bác sĩ `ACTIVE`, **không** kiểm tra Bác sĩ rảnh.
-
-#### 7. REST Controller (`PetVisitController.java`) – làm giàu dữ liệu qua Feign **sau khi** giao dịch đã commit
+#### 7. REST Controller (`PetVisitController.java`)
 ```java
-package com.vetclinic.clinical.controller;
-
-import com.vetclinic.clinical.dto.request.StartExaminationRequest;
-import com.vetclinic.clinical.dto.response.PetVisitResponse;
-import com.vetclinic.clinical.service.PetVisitService;
-import com.vetclinic.clinical.service.UserInfoEnricher;
-import com.vetclinic.common.dto.ApiResponse;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
 @RestController
 @RequestMapping("/api/v1/clinical/pet-visits")
 @RequiredArgsConstructor
 public class PetVisitController {
 
     private final PetVisitService petVisitService;
-    private final UserInfoEnricher userInfoEnricher;   // gọi UserClient, lỗi Feign chỉ log cảnh báo, không làm hỏng nghiệp vụ
+    private final UserRoomResolver roomResolver;     // ngoài giao dịch, có cache + fallback
 
-    /** Bác sĩ bắt đầu khám lâm sàng Giai đoạn 1 (UC-22, T02) */
     @PostMapping("/{id}/start-exam")
     @PreAuthorize("hasRole('VETERINARIAN')")
     public ResponseEntity<ApiResponse<PetVisitResponse>> startExamination(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody(required = false) StartExaminationRequest request) {
-
-        PetVisitResponse response = petVisitService.startExamination(id,
-                request != null ? request : new StartExaminationRequest());
-        userInfoEnricher.fillDoctorInfo(response);   // ngoài @Transactional: doctorName, roomNumber
-        return ResponseEntity.ok(ApiResponse.success("Bác sĩ đã bắt đầu khám lâm sàng", response));
+            @PathVariable UUID id, @Valid @RequestBody(required = false) StartExaminationRequest request) {
+        PetVisitResponse res = petVisitService.startExamination(id,
+                request != null ? request : new StartExaminationRequest(null, null));
+        return ResponseEntity.ok(ApiResponse.success("Bác sĩ đã bắt đầu khám lâm sàng",
+                res.withRoomNumber(roomResolver.roomOf(res.doctorId()))));   // tên Bác sĩ đã có sẵn từ snapshot
     }
 }
 ```
@@ -1774,7 +1791,7 @@ import com.vetclinic.appointment.repository.AppointmentRepository;
 import com.vetclinic.appointment.repository.AppointmentStatusHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
+import com.vetclinic.common.outbox.OutboxWriter;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -1791,7 +1808,7 @@ public class AppointmentNoShowScheduler {
 
     private final AppointmentRepository appointmentRepository;
     private final AppointmentStatusHistoryRepository statusHistoryRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxWriter outbox;                          // v4.0: ghi sự kiện cùng giao dịch
 
     /**
      * Chạy mỗi 5 phút trong giờ làm việc.
@@ -1817,7 +1834,8 @@ public class AppointmentNoShowScheduler {
                     .changedByUserId(null)                      // null = hệ thống tự động
                     .notes("Tự động đánh dấu vắng mặt do trễ quá 30 phút so với giờ hẹn")
                     .build());                                  // created_at do CSDL gán
-            eventPublisher.publishEvent(new AppointmentNoShowEvent(appt.getId(), appt.getPetId()));
+            outbox.write("APPOINTMENT", appt.getId(), "appointment.no_show",
+                    AppointmentNoShowEvent.of(appt));          // id là UUID; payload có tên thú cưng / chủ nuôi từ snapshot
         }
     }
 }
@@ -1829,15 +1847,16 @@ public class AppointmentNoShowScheduler {
 
 ## TỔNG KẾT & CAM KẾT TUÂN THỦ
 
-1. **Hiệu lực thi hành:** Tài liệu Phiên bản 3.0 có giá trị áp dụng ngay từ ngày bắt đầu lập trình (Sprint 1 - Tuần 9 theo Kế hoạch đồ án; khung dự án dựng từ Tuần 8).
-2. **Quy tắc Code Review:** Khi tạo Pull Request (PR) trên Git, mọi thành viên bắt buộc kiểm tra đối soát chéo theo danh sách 11 Chương quy chuẩn này. Bất kỳ đoạn mã nào vi phạm (ví dụ: trừ kho không nguyên tử, bắn RabbitMQ trước commit, trả Entity trực tiếp, thiếu `@PreAuthorize`) đều bị từ chối phê duyệt (Reject PR).
+1. **Hiệu lực thi hành:** Tài liệu Phiên bản 4.0 (18/11/2026) có giá trị áp dụng ngay từ ngày bắt đầu lập trình (Sprint 1 - Tuần 9 theo Kế hoạch đồ án; khung dự án dựng từ Tuần 8).
+2. **Quy tắc Code Review:** Khi tạo Pull Request (PR) trên Git, mọi thành viên bắt buộc kiểm tra đối soát chéo theo danh sách 11 Chương quy chuẩn này. Bất kỳ đoạn mã nào vi phạm (ví dụ: trừ kho không nguyên tử, gửi sự kiện nghiệp vụ không qua outbox, consumer không idempotent, thao tác Redis trong `@Transactional`, khóa thực thể dùng `Long` / UUIDv4, cột `ENUM` MySQL, sửa số tiền của dòng giá cũ, trả Entity trực tiếp, thiếu `@PreAuthorize`) đều bị từ chối phê duyệt (Reject PR).
 
 ---
 
-## PHỤ LỤC: THAY ĐỔI SO VỚI PHIÊN BẢN 2.0
+## PHỤ LỤC: LỊCH SỬ THAY ĐỔI
 
-| Vị trí | Bản 2.0 | Bản 3.0 | Lý do |
+| Vị trí | Bản cũ | Bản mới | Lý do |
 | :--- | :--- | :--- | :--- |
+| **Toàn bộ (v4.0, 18/11/2026)** | Khóa `Long`; `QueueTicket` JPA + `TicketIssuer` phát phiếu trong giao dịch thu tiền; `@TransactionalEventListener(AFTER_COMMIT)` gửi sự kiện; `Medicine` chứa giá, tồn; bán thuốc từ `prescription_items`; `X-User-Role` một vai trò; refresh token lưu nguyên văn; 41 mã lỗi; 9–10 sự kiện | Khóa `UUID` v7 (`@UuidGenerator VERSION_7`), danh mục `Short`; hàng đợi Redis (`QueueRedisRepository`, Lua `issue/start/finish/move_ticket`, `QueueIssuerListener`, `QueueRebuildJob`); `OutboxWriter` + `OutboxRelay` + `IdempotentConsumer`; `ServicePriceBook` / `MedicinePriceBook`; `MedicineStock` tách riêng, trừ kho trên `medicine_stocks`; hóa đơn thuốc nháp từ `PrescriptionCreatedEvent`, dòng trỏ `medicines`; `X-User-Roles` nhiều vai trò, `SecurityUtils` trả `UUID`; refresh token lưu SHA-256; 49 mã lỗi; 17 sự kiện; module `reporting-service`; Redis + Resilience4j trong tech stack; mẫu 11.2 dùng `vital_signs`, `medical_records` | Nhận xét chi tiết của GVHD (Notes.pdf + góp ý bổ sung) |
 | Tiêu đề, Chương 1, 11.1 | Spring Boot "4.1.11" | Spring Boot 4.1.1 + Spring Cloud 2025.1.2 (Oakwood) trở lên | Không có bản 4.1.11; 2025.1.2 là bản Spring Cloud đầu tiên hỗ trợ Boot 4.1 |
 | 2.2 | `scanBasePackages = "com.vetclinic"` cho mọi service; cấu hình servlet là `@Component` / `@Configuration` trong `common-library` | Mỗi service quét package riêng; cấu hình servlet nạp bằng `CommonWebAutoConfiguration` (`@ConditionalOnWebApplication(SERVLET)`); phụ thuộc servlet của `common-library` là `optional`; Eureka không dùng `common-library` | Gateway (WebFlux) và Eureka lỗi khởi động khi nạp nhầm cấu hình servlet |
 | 3.1 | Ví dụ enum `DISPENSED`; tiền `totalAmount` | `EXPORT_SALE`; không lưu tổng tiền | Enum và cột đã bỏ ở v3.0 |
@@ -1860,3 +1879,4 @@ public class AppointmentNoShowScheduler {
 | 3.2, 5.1, 11.2 (rà soát 11/11) | `findWaitingQueue()` hàng đợi sảnh chung; `CLIN_1303 DOCTOR_PRIORITY_LOCKED`; không có API gọi số / đẩy lùi | Hàng đợi riêng từng Bác sĩ: `findDoctorQueue`, `findUnassigned`, `countWaitingByDoctor`; `DoctorQueueServiceImpl` (`callNext`, `skip`), `QueueOrders`; `CLIN_1303 QUEUE_EMPTY` (vẫn 39 mã); thêm `GET …/queue`, `…/my-queue`, `POST …/call-next`, `…/{id}/skip`, `service-details/{id}/skip` | Mô hình hàng đợi riêng + Đẩy lùi 1 bậc |
 | 3.2, 6b (cập nhật 13/11) | `POST …/{id}/skip`, `service-details/{id}/skip`; mã mẫu `skip` (Đẩy lùi 1 bậc) và ghi chú về `rest` | `POST …/{id}/call`, `service-details/{id}/call`; mã mẫu `call` (không đổi trạng thái/thứ tự); ghi chú vì sao bỏ đẩy lùi | Đẩy lùi 1 bậc làm hai ca đầu hàng đổi chỗ mãi mãi và làm ca cấp cứu mất ưu tiên; gọi theo từng dòng giống thực tế phòng khám |
 | 5.1, 8.2 (cập nhật 13/11) | `PURCHASE_QUANTITY_EXCEEDS_PRESCRIBED` (`PHARM_1410`): mua ≤ số lượng kê; mã mẫu `createInvoice` / `updateItems` chặn theo số kê | Bỏ mã `PHARM_1410` (còn 38 mã); mã mẫu chặn theo tồn kho bằng `INSUFFICIENT_STOCK` (`PHARM_1406`); số kê chỉ để tham khảo | Khách có thể mua nhiều hơn / ít hơn đơn; ràng buộc đúng là tồn kho (kiểm tra sớm, và kiểm tra lại nguyên tử lúc thu tiền) |
+| 3.1, 3.2, 5.1, 7.2, 8.3, 11.2 (cập nhật 16–17/11) | Hàng đợi đọc `queue_order` trên `PetVisit` / `VisitServiceDetail` (`QueueOrders`, `findMinQueueOrder`); API gọi số theo `pet-visits/{id}/call`, `service-details/{id}/call`; dịch vụ khám tạo lúc `start-exam`; thu tiền chỉ khi `WAITING_PAYMENT`; `CLIN_1310` cấm hủy dịch vụ đã thu | Hàng đợi là `QueueTicket` (`QueueTicketRepository`, `QueueTicketServiceImpl`, `TicketIssuer`); API `queue-tickets/{id}/call`, `/start`, `call-next?queueType=`; `cashier/pending` 3 mục; `start-exam` yêu cầu phiếu `DOCTOR` `WAITING` (`CLIN_1314`); `confirmServicePayment` thu ngay dịch vụ `requiresPrepayment` và phát phiếu cùng giao dịch; `REFUNDED`; mã lỗi `CLIN_1310` (không hoàn), `CLIN_1312`–`CLIN_1314`; 12 enum | Góp ý GVHD: tách quy trình thanh toán khỏi quy trình khám; tách dữ liệu hàng đợi khỏi hồ sơ khám |
